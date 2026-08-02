@@ -6,5 +6,5 @@
         "usbd_cdc_if.h": "c"
     },
     "stm32-for-vscode.openOCDPath": false,
-    "stm32-for-vscode.makePath": false
+    "stm32-for-vscode.makePath": "C:\\MinGW\\gcc\\bin\\make.EXE"
 }
