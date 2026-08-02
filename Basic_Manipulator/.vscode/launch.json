@@ -1,0 +1,42 @@
+{
+    "configurations": [
+        {
+            "showDevDebugOutput": "parsed",
+            "cwd": "${workspaceRoot}",
+            "executable": "./build/Basic_Manipulator.elf",
+            "name": "Debug STM32",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "openocd",
+            "preLaunchTask": "Build STM",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 4
+              },
+            "svdFile" : "${workspaceRoot}/build/STM32F103.svd",
+            "device": "stm32f103xb.s",
+            "configFiles": [
+                "openocd.cfg"
+            ]
+        },
+        {
+            "showDevDebugOutput": "parsed",
+            "cwd": "${workspaceRoot}",
+            "executable": "./build/Basic_Manipulator.elf",
+            "name": "Attach STM32",
+            "request": "attach",
+            "type": "cortex-debug",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 4
+              },
+            "svdFile" : "${workspaceRoot}/build/STM32F103.svd",
+            "servertype": "openocd",
+            "preLaunchTask": "Build STM",
+            "device": "stm32f103xb.s",
+            "configFiles": [
+                "openocd.cfg"
+            ]
+        }
+    ]
+}

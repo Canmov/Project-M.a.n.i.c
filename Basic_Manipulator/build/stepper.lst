@@ -1,0 +1,1896 @@
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 1
+
+
+   1              		.cpu cortex-m3
+   2              		.arch armv7-m
+   3              		.fpu softvfp
+   4              		.eabi_attribute 20, 1
+   5              		.eabi_attribute 21, 1
+   6              		.eabi_attribute 23, 3
+   7              		.eabi_attribute 24, 1
+   8              		.eabi_attribute 25, 1
+   9              		.eabi_attribute 26, 1
+  10              		.eabi_attribute 30, 1
+  11              		.eabi_attribute 34, 1
+  12              		.eabi_attribute 18, 4
+  13              		.file	"stepper.c"
+  14              		.text
+  15              	.Ltext0:
+  16              		.cfi_sections	.debug_frame
+  17              		.file 1 "Core/Src/stepper.c"
+  18              		.section	.text.Servo_SetAngle,"ax",%progbits
+  19              		.align	1
+  20              		.global	Servo_SetAngle
+  21              		.syntax unified
+  22              		.thumb
+  23              		.thumb_func
+  25              	Servo_SetAngle:
+  26              	.LVL0:
+  27              	.LFB69:
+   1:Core/Src/stepper.c **** #include "stepper.h"
+   2:Core/Src/stepper.c **** #include "stm32f1xx.h"
+   3:Core/Src/stepper.c **** #include "stdbool.h"
+   4:Core/Src/stepper.c **** #include "math.h"
+   5:Core/Src/stepper.c **** 
+   6:Core/Src/stepper.c **** volatile float Steps = 0;
+   7:Core/Src/stepper.c **** volatile bool flag = 0;
+   8:Core/Src/stepper.c **** 
+   9:Core/Src/stepper.c **** float pos[3] = {90, 90, 90};
+  10:Core/Src/stepper.c **** float prev[2] = {90, 0};
+  11:Core/Src/stepper.c **** 
+  12:Core/Src/stepper.c **** float t[3] = {0};
+  13:Core/Src/stepper.c **** 
+  14:Core/Src/stepper.c **** uint8_t btn_cnt;
+  15:Core/Src/stepper.c **** 
+  16:Core/Src/stepper.c **** void take_object (int x, int y, int z)
+  17:Core/Src/stepper.c **** {
+  18:Core/Src/stepper.c ****   CLAW_OPEN; // открываем хват
+  19:Core/Src/stepper.c ****   inv_kin(x, y, z); // обратная кинематики для захвата
+  20:Core/Src/stepper.c ****   HAL_Delay(1000); // ждём захвата 500 мс
+  21:Core/Src/stepper.c ****   /*поднятие руки с объектом*/
+  22:Core/Src/stepper.c ****   Stepper_Angle(1, 90); //поднялся
+  23:Core/Src/stepper.c ****   Stepper_Angle(2, 90);
+  24:Core/Src/stepper.c ****   Servo_SetAngle(0, 90);
+  25:Core/Src/stepper.c ****   
+  26:Core/Src/stepper.c ****   
+  27:Core/Src/stepper.c ****   inv_kin(1, -170, 50); // перемещение объекта к баку
+  28:Core/Src/stepper.c ****   
+  29:Core/Src/stepper.c ****   CLAW_OPEN; // объект сброшен в бак
+  30:Core/Src/stepper.c **** 
+  31:Core/Src/stepper.c ****   /*возврат в начальную установку*/
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 2
+
+
+  32:Core/Src/stepper.c ****   Stepper_Angle(2, 90); 
+  33:Core/Src/stepper.c ****   Stepper_Angle(1, 90);
+  34:Core/Src/stepper.c ****   Servo_SetAngle(0, 90);
+  35:Core/Src/stepper.c ****   Stepper_Angle(0, 90); 
+  36:Core/Src/stepper.c **** }
+  37:Core/Src/stepper.c **** 
+  38:Core/Src/stepper.c **** void inv_kin(int x, int y, int z)
+  39:Core/Src/stepper.c **** {
+  40:Core/Src/stepper.c **** 	float alfa, betta, gamma, delta; // Выходные значения
+  41:Core/Src/stepper.c **** 	float L, P, c, b1, b2; // Промежуточные переменные
+  42:Core/Src/stepper.c **** 
+  43:Core/Src/stepper.c **** 	alfa = atan2f(x, y) + pi/2; // расчёт угла нулевого звена поворта б
+  44:Core/Src/stepper.c **** 
+  45:Core/Src/stepper.c ****     P = sqrt(pow(x, 2) + pow(y, 2)) - 5; // расчёт проекции на плоскость �
+  46:Core/Src/stepper.c **** 	L = sqrt(pow(P, 2) + pow(A - D - z, 2)); // расчёт расстояния между перв�
+  47:Core/Src/stepper.c ****     
+  48:Core/Src/stepper.c **** 	/*поиск угла между первым и вторым звеньями*/
+  49:Core/Src/stepper.c **** 	c = acos((pow(B, 2) +  pow(C, 2) - pow(L, 2))  /  (2 * B * C));
+  50:Core/Src/stepper.c ****     
+  51:Core/Src/stepper.c **** 	gamma = pi - c; // угол второго звена
+  52:Core/Src/stepper.c ****     
+  53:Core/Src/stepper.c **** 	/*промежуточные углы для нахождения углов первого и т�
+  54:Core/Src/stepper.c **** 	b1 = acos((pow(B, 2) + pow(L, 2) - pow(C, 2))  /  (2 * B * L));
+  55:Core/Src/stepper.c **** 	b2 = atan((z + D - A) / P);
+  56:Core/Src/stepper.c **** 
+  57:Core/Src/stepper.c **** 	betta = b1 + b2; // угол первого звена
+  58:Core/Src/stepper.c **** 
+  59:Core/Src/stepper.c **** 	delta = pi - b1 - b2 - c; // угол третьего звена
+  60:Core/Src/stepper.c ****     
+  61:Core/Src/stepper.c **** 	/*перевод из радиан в углы*/
+  62:Core/Src/stepper.c **** 	alfa = alfa * 180 / pi;
+  63:Core/Src/stepper.c **** 	betta = betta * 180 / pi;
+  64:Core/Src/stepper.c **** 	gamma = gamma * 180 / pi;
+  65:Core/Src/stepper.c **** 	delta = delta * 180 / pi;
+  66:Core/Src/stepper.c ****     
+  67:Core/Src/stepper.c **** 	/*установка двигателей по найденным углам*/
+  68:Core/Src/stepper.c **** 	Stepper_Angle(0, alfa);
+  69:Core/Src/stepper.c **** 	Servo_SetAngle(0, delta);
+  70:Core/Src/stepper.c **** 	Stepper_Angle(2, gamma);
+  71:Core/Src/stepper.c **** 	Stepper_Angle(1, betta);
+  72:Core/Src/stepper.c **** 	
+  73:Core/Src/stepper.c **** 	CLAW_CLOSE; // захват объекта
+  74:Core/Src/stepper.c **** 	
+  75:Core/Src/stepper.c **** }
+  76:Core/Src/stepper.c **** 
+  77:Core/Src/stepper.c **** void stepper_init()
+  78:Core/Src/stepper.c **** {
+  79:Core/Src/stepper.c **** 	/*установка захвата*/
+  80:Core/Src/stepper.c **** 	Servo_SetAngle(0,150);
+  81:Core/Src/stepper.c **** 	flag = 0;
+  82:Core/Src/stepper.c **** 	CLAW_OPEN;
+  83:Core/Src/stepper.c ****     
+  84:Core/Src/stepper.c **** 	/*Вращение второго звена на 180 пока не заденет концеви�
+  85:Core/Src/stepper.c **** 	Stepper_Step(2, 1, STEPS_PER_REV*GEAR_RATIO_2/2);
+  86:Core/Src/stepper.c **** 	pos[2] = 159.5; // позиция при касании концевика
+  87:Core/Src/stepper.c **** 	flag = 0; // разрешаем работу двигателя
+  88:Core/Src/stepper.c **** 	Stepper_Angle(2, 90);
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 3
+
+
+  89:Core/Src/stepper.c ****     
+  90:Core/Src/stepper.c **** 	/*Вращение первого звена на 180 пока не заденет концеви�
+  91:Core/Src/stepper.c **** 	Stepper_Step(1, 1, STEPS_PER_REV*GEAR_RATIO_1/2);
+  92:Core/Src/stepper.c **** 	pos[1] = 185.5; // позиция при касании концевика
+  93:Core/Src/stepper.c **** 	flag = 0; // разрешаем работу двигателя
+  94:Core/Src/stepper.c **** 	Stepper_Angle(1, 90); // перемещение в начальную установку
+  95:Core/Src/stepper.c ****     
+  96:Core/Src/stepper.c **** 	/*Вращение нулевого звена на 180 пока не заденет концев�
+  97:Core/Src/stepper.c **** 	Stepper_Step(0, 0, STEPS_PER_REV*GEAR_RATIO_0/2);
+  98:Core/Src/stepper.c **** 	pos[0] = 98; // позиция при касании концевика против часово�
+  99:Core/Src/stepper.c **** 	if (flag != 1) // если концевик так и не был задет за 180 градус
+ 100:Core/Src/stepper.c **** 	{
+ 101:Core/Src/stepper.c **** 		/*двигаемся в обратную сторону на 360 градусов*/
+ 102:Core/Src/stepper.c **** 		Stepper_Step(0, 1, STEPS_PER_REV*GEAR_RATIO_0);
+ 103:Core/Src/stepper.c **** 		pos[0] = 91.5; // позиция при касании концевика по часовой с�
+ 104:Core/Src/stepper.c **** 	}
+ 105:Core/Src/stepper.c **** 	flag = 0; // разрешаем работу двигателя
+ 106:Core/Src/stepper.c **** 	Stepper_Angle(0, 90); // перемещение в начальную установку
+ 107:Core/Src/stepper.c **** }
+ 108:Core/Src/stepper.c **** 
+ 109:Core/Src/stepper.c **** void Stepper_Angle(uint8_t Link, float Angle) // принимаем номер звена и зад
+ 110:Core/Src/stepper.c **** {
+ 111:Core/Src/stepper.c **** 	/*Вспомогательные переменные*/ 
+ 112:Core/Src/stepper.c **** 	int max_angle = 0, min_angle = 0; // для определения ограничений по у�
+ 113:Core/Src/stepper.c **** 	uint8_t gear_ratio = 0;           // для определения передаточного чи
+ 114:Core/Src/stepper.c ****   	bool Direction = 0;               // для направления вращения
+ 115:Core/Src/stepper.c **** 
+ 116:Core/Src/stepper.c ****    /*Опреатор выбора макс. и мин. угла передвижения звен�
+ 117:Core/Src/stepper.c ****     в соответствии с заданным номером звена*/ 
+ 118:Core/Src/stepper.c **** 	switch (Link) 
+ 119:Core/Src/stepper.c **** 	{                
+ 120:Core/Src/stepper.c **** 	case 0:
+ 121:Core/Src/stepper.c **** 		max_angle = 360, min_angle = 0, gear_ratio = GEAR_RATIO_0; 
+ 122:Core/Src/stepper.c **** 		break;
+ 123:Core/Src/stepper.c **** 	case 1:
+ 124:Core/Src/stepper.c **** 		max_angle = 180, min_angle = 0, gear_ratio = GEAR_RATIO_1;
+ 125:Core/Src/stepper.c **** 		break;
+ 126:Core/Src/stepper.c **** 	case 2:
+ 127:Core/Src/stepper.c **** 		max_angle = 180, min_angle = 0, gear_ratio = GEAR_RATIO_2;
+ 128:Core/Src/stepper.c **** 		break;
+ 129:Core/Src/stepper.c **** 	}
+ 130:Core/Src/stepper.c **** 
+ 131:Core/Src/stepper.c ****     /*Ограничим угол перемещения при превышении минимум
+ 132:Core/Src/stepper.c **** 	во избежание аварийных ситуаций */
+ 133:Core/Src/stepper.c **** 	if (Angle < min_angle) Angle = min_angle;   
+ 134:Core/Src/stepper.c **** 	if (Angle > max_angle) Angle = max_angle; 
+ 135:Core/Src/stepper.c **** 
+ 136:Core/Src/stepper.c **** 	/*Если заданный угол больше текущего, то установка еди
+ 137:Core/Src/stepper.c **** 	if (pos[Link] < Angle) Direction = 1;
+ 138:Core/Src/stepper.c ****     
+ 139:Core/Src/stepper.c ****     /*Расчёт количества шагов из текущего положения в за
+ 140:Core/Src/stepper.c **** 	Steps = fabs(pos[Link] - Angle) * ((float)STEPS_PER_REV * gear_ratio / (float)360);
+ 141:Core/Src/stepper.c **** 
+ 142:Core/Src/stepper.c ****     /*Обновляем текущее положения в соответствии с зада�
+ 143:Core/Src/stepper.c **** 	pos[Link] = Angle; 
+ 144:Core/Src/stepper.c ****     
+ 145:Core/Src/stepper.c **** 	/*Передаём кол-во необходимых шагов для перемещения з�
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 4
+
+
+ 146:Core/Src/stepper.c ****     Stepper_Step(Link, Direction, Steps);
+ 147:Core/Src/stepper.c **** }
+ 148:Core/Src/stepper.c **** 
+ 149:Core/Src/stepper.c **** void Servo_SetAngle(uint8_t Link, float Angle)
+ 150:Core/Src/stepper.c **** {
+  28              		.loc 1 150 1 view -0
+  29              		.cfi_startproc
+  30              		@ args = 0, pretend = 0, frame = 0
+  31              		@ frame_needed = 0, uses_anonymous_args = 0
+  32              		.loc 1 150 1 is_stmt 0 view .LVU1
+  33 0000 2DE9F041 		push	{r4, r5, r6, r7, r8, lr}
+  34              	.LCFI0:
+  35              		.cfi_def_cfa_offset 24
+  36              		.cfi_offset 4, -24
+  37              		.cfi_offset 5, -20
+  38              		.cfi_offset 6, -16
+  39              		.cfi_offset 7, -12
+  40              		.cfi_offset 8, -8
+  41              		.cfi_offset 14, -4
+  42 0004 0446     		mov	r4, r0
+  43 0006 0846     		mov	r0, r1
+  44              	.LVL1:
+ 151:Core/Src/stepper.c ****     uint16_t value;
+  45              		.loc 1 151 5 is_stmt 1 view .LVU2
+ 152:Core/Src/stepper.c **** 	Angle = Angle - 10;
+  46              		.loc 1 152 2 view .LVU3
+  47              		.loc 1 152 8 is_stmt 0 view .LVU4
+  48 0008 2A49     		ldr	r1, .L14
+  49              	.LVL2:
+  50              		.loc 1 152 8 view .LVU5
+  51 000a FFF7FEFF 		bl	__aeabi_fsub
+  52              	.LVL3:
+  53              		.loc 1 152 8 view .LVU6
+  54 000e 0746     		mov	r7, r0
+  55              	.LVL4:
+ 153:Core/Src/stepper.c **** 	if(Angle < MIN_ANGLE) Angle = MIN_ANGLE;
+  56              		.loc 1 153 2 is_stmt 1 view .LVU7
+  57              		.loc 1 153 4 is_stmt 0 view .LVU8
+  58 0010 0021     		movs	r1, #0
+  59 0012 FFF7FEFF 		bl	__aeabi_fcmplt
+  60              	.LVL5:
+  61              		.loc 1 153 4 view .LVU9
+  62 0016 30B9     		cbnz	r0, .L8
+ 154:Core/Src/stepper.c **** 	if(Angle > MAX_ANGLE) Angle = MAX_ANGLE;
+  63              		.loc 1 154 2 is_stmt 1 view .LVU10
+  64              		.loc 1 154 4 is_stmt 0 view .LVU11
+  65 0018 2749     		ldr	r1, .L14+4
+  66 001a 3846     		mov	r0, r7
+  67 001c FFF7FEFF 		bl	__aeabi_fcmpgt
+  68              	.LVL6:
+  69 0020 10B1     		cbz	r0, .L2
+  70              		.loc 1 154 30 discriminator 1 view .LVU12
+  71 0022 254F     		ldr	r7, .L14+4
+  72              	.LVL7:
+  73              		.loc 1 154 30 discriminator 1 view .LVU13
+  74 0024 00E0     		b	.L2
+  75              	.LVL8:
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 5
+
+
+  76              	.L8:
+ 153:Core/Src/stepper.c **** 	if(Angle < MIN_ANGLE) Angle = MIN_ANGLE;
+  77              		.loc 1 153 30 discriminator 1 view .LVU14
+  78 0026 0027     		movs	r7, #0
+  79              	.LVL9:
+  80              	.L2:
+ 155:Core/Src/stepper.c **** 
+ 156:Core/Src/stepper.c ****     __IO uint32_t * regs= (uint32_t *) (TIM4_BASE + (0x34+Link*4));
+  81              		.loc 1 156 5 is_stmt 1 view .LVU15
+  82              		.loc 1 156 58 is_stmt 0 view .LVU16
+  83 0028 04F10D08 		add	r8, r4, #13
+  84 002c 4FEA8808 		lsl	r8, r8, #2
+  85              		.loc 1 156 51 view .LVU17
+  86 0030 08F18048 		add	r8, r8, #1073741824
+  87 0034 08F50068 		add	r8, r8, #2048
+  88              	.LVL10:
+  89              		.loc 1 156 51 view .LVU18
+  90 0038 27E0     		b	.L6
+  91              	.L11:
+ 157:Core/Src/stepper.c **** 
+ 158:Core/Src/stepper.c ****     while(1)
+ 159:Core/Src/stepper.c **** 	{
+ 160:Core/Src/stepper.c **** 	   if (prev[Link] > Angle){ 
+ 161:Core/Src/stepper.c **** 		prev[Link]--;		
+ 162:Core/Src/stepper.c **** 	   }
+ 163:Core/Src/stepper.c **** 	   else{
+ 164:Core/Src/stepper.c ****         prev[Link]++;		
+  92              		.loc 1 164 9 is_stmt 1 view .LVU19
+  93              		.loc 1 164 19 is_stmt 0 view .LVU20
+  94 003a 4FF07E51 		mov	r1, #1065353216
+  95 003e 2846     		mov	r0, r5
+  96 0040 FFF7FEFF 		bl	__aeabi_fadd
+  97              	.LVL11:
+  98 0044 1D4B     		ldr	r3, .L14+8
+  99 0046 43F82400 		str	r0, [r3, r4, lsl #2]	@ float
+ 100              	.L5:
+ 165:Core/Src/stepper.c **** 	   }
+ 166:Core/Src/stepper.c **** 	value = prev[Link] * ((float)MAX_PWM - (float)MIN_PWM) / ((float)MAX_ANGLE - MIN_ANGLE) + (float)M
+ 101              		.loc 1 166 2 is_stmt 1 view .LVU21
+ 102              		.loc 1 166 14 is_stmt 0 view .LVU22
+ 103 004a 1C4E     		ldr	r6, .L14+8
+ 104              		.loc 1 166 21 view .LVU23
+ 105 004c 1C49     		ldr	r1, .L14+12
+ 106 004e 56F82400 		ldr	r0, [r6, r4, lsl #2]	@ float
+ 107 0052 FFF7FEFF 		bl	__aeabi_fmul
+ 108              	.LVL12:
+ 109              		.loc 1 166 57 view .LVU24
+ 110 0056 1849     		ldr	r1, .L14+4
+ 111 0058 FFF7FEFF 		bl	__aeabi_fdiv
+ 112              	.LVL13:
+ 113              		.loc 1 166 90 view .LVU25
+ 114 005c 1949     		ldr	r1, .L14+16
+ 115 005e FFF7FEFF 		bl	__aeabi_fadd
+ 116              	.LVL14:
+ 117              		.loc 1 166 8 view .LVU26
+ 118 0062 FFF7FEFF 		bl	__aeabi_f2uiz
+ 119              	.LVL15:
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 6
+
+
+ 120 0066 85B2     		uxth	r5, r0
+ 121              	.LVL16:
+ 167:Core/Src/stepper.c **** 	HAL_Delay(20);
+ 122              		.loc 1 167 2 is_stmt 1 view .LVU27
+ 123 0068 1420     		movs	r0, #20
+ 124 006a FFF7FEFF 		bl	HAL_Delay
+ 125              	.LVL17:
+ 168:Core/Src/stepper.c **** 	*(__IO uint32_t *)regs = value;
+ 126              		.loc 1 168 2 view .LVU28
+ 127              		.loc 1 168 25 is_stmt 0 view .LVU29
+ 128 006e C8F80050 		str	r5, [r8]
+ 169:Core/Src/stepper.c **** 	if(fabs(prev[Link]-Angle) < 1) break;
+ 129              		.loc 1 169 2 is_stmt 1 view .LVU30
+ 130              		.loc 1 169 20 is_stmt 0 view .LVU31
+ 131 0072 3946     		mov	r1, r7
+ 132 0074 56F82400 		ldr	r0, [r6, r4, lsl #2]	@ float
+ 133 0078 FFF7FEFF 		bl	__aeabi_fsub
+ 134              	.LVL18:
+ 135              		.loc 1 169 5 view .LVU32
+ 136 007c 20F00040 		bic	r0, r0, #-2147483648
+ 137              		.loc 1 169 4 view .LVU33
+ 138 0080 4FF07E51 		mov	r1, #1065353216
+ 139 0084 FFF7FEFF 		bl	__aeabi_fcmplt
+ 140              	.LVL19:
+ 141 0088 88B9     		cbnz	r0, .L13
+ 142              	.LVL20:
+ 143              	.L6:
+ 158:Core/Src/stepper.c **** 	{
+ 144              		.loc 1 158 5 is_stmt 1 view .LVU34
+ 160:Core/Src/stepper.c **** 		prev[Link]--;		
+ 145              		.loc 1 160 5 view .LVU35
+ 160:Core/Src/stepper.c **** 		prev[Link]--;		
+ 146              		.loc 1 160 13 is_stmt 0 view .LVU36
+ 147 008a 0C4B     		ldr	r3, .L14+8
+ 148 008c 53F82450 		ldr	r5, [r3, r4, lsl #2]	@ float
+ 160:Core/Src/stepper.c **** 		prev[Link]--;		
+ 149              		.loc 1 160 8 view .LVU37
+ 150 0090 3946     		mov	r1, r7
+ 151 0092 2846     		mov	r0, r5
+ 152 0094 FFF7FEFF 		bl	__aeabi_fcmpgt
+ 153              	.LVL21:
+ 154 0098 0028     		cmp	r0, #0
+ 155 009a CED0     		beq	.L11
+ 161:Core/Src/stepper.c **** 	   }
+ 156              		.loc 1 161 3 is_stmt 1 view .LVU38
+ 161:Core/Src/stepper.c **** 	   }
+ 157              		.loc 1 161 13 is_stmt 0 view .LVU39
+ 158 009c 4FF07E51 		mov	r1, #1065353216
+ 159 00a0 2846     		mov	r0, r5
+ 160 00a2 FFF7FEFF 		bl	__aeabi_fsub
+ 161              	.LVL22:
+ 162 00a6 054B     		ldr	r3, .L14+8
+ 163 00a8 43F82400 		str	r0, [r3, r4, lsl #2]	@ float
+ 164 00ac CDE7     		b	.L5
+ 165              	.LVL23:
+ 166              	.L13:
+ 170:Core/Src/stepper.c **** 	}
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 7
+
+
+ 171:Core/Src/stepper.c **** }
+ 167              		.loc 1 171 1 view .LVU40
+ 168 00ae BDE8F081 		pop	{r4, r5, r6, r7, r8, pc}
+ 169              	.LVL24:
+ 170              	.L15:
+ 171              		.loc 1 171 1 view .LVU41
+ 172 00b2 00BF     		.align	2
+ 173              	.L14:
+ 174 00b4 00002041 		.word	1092616192
+ 175 00b8 00003443 		.word	1127481344
+ 176 00bc 00000000 		.word	prev
+ 177 00c0 0000C842 		.word	1120403456
+ 178 00c4 0000C841 		.word	1103626240
+ 179              		.cfi_endproc
+ 180              	.LFE69:
+ 182              		.section	.text.Stepper_Step,"ax",%progbits
+ 183              		.align	1
+ 184              		.global	Stepper_Step
+ 185              		.syntax unified
+ 186              		.thumb
+ 187              		.thumb_func
+ 189              	Stepper_Step:
+ 190              	.LVL25:
+ 191              	.LFB70:
+ 172:Core/Src/stepper.c **** 
+ 173:Core/Src/stepper.c **** 
+ 174:Core/Src/stepper.c **** void Stepper_Step(uint8_t Link, bool Direction, uint32_t Steps) //принимаем номер з�
+ 175:Core/Src/stepper.c **** {   
+ 192              		.loc 1 175 1 is_stmt 1 view -0
+ 193              		.cfi_startproc
+ 194              		@ args = 0, pretend = 0, frame = 0
+ 195              		@ frame_needed = 0, uses_anonymous_args = 0
+ 196              		.loc 1 175 1 is_stmt 0 view .LVU43
+ 197 0000 F8B5     		push	{r3, r4, r5, r6, r7, lr}
+ 198              	.LCFI1:
+ 199              		.cfi_def_cfa_offset 24
+ 200              		.cfi_offset 3, -24
+ 201              		.cfi_offset 4, -20
+ 202              		.cfi_offset 5, -16
+ 203              		.cfi_offset 6, -12
+ 204              		.cfi_offset 7, -8
+ 205              		.cfi_offset 14, -4
+ 206 0002 0B46     		mov	r3, r1
+ 207 0004 1446     		mov	r4, r2
+ 176:Core/Src/stepper.c **** 	/*Вспомогательные переменные*/ 
+ 177:Core/Src/stepper.c **** 	uint32_t PUL_Port = 0; // для определения порта, на котором наход
+ 208              		.loc 1 177 2 is_stmt 1 view .LVU44
+ 209              	.LVL26:
+ 178:Core/Src/stepper.c **** 	uint16_t PUL_Pin, DIR_Pin = 0; // для определения пина подачи импуль
+ 210              		.loc 1 178 2 view .LVU45
+ 179:Core/Src/stepper.c **** 	uint8_t Speed = 0; // для определения скорости (длительности и�
+ 211              		.loc 1 179 2 view .LVU46
+ 180:Core/Src/stepper.c **** 
+ 181:Core/Src/stepper.c ****     /*Оператор выбор порта и пина для подачи импульса ша�
+ 182:Core/Src/stepper.c **** 	switch (Link)
+ 212              		.loc 1 182 2 view .LVU47
+ 213 0006 0128     		cmp	r0, #1
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 8
+
+
+ 214 0008 0ED0     		beq	.L21
+ 215 000a 0025     		movs	r5, #0
+ 216 000c 0228     		cmp	r0, #2
+ 217 000e 11D0     		beq	.L22
+ 218 0010 A8B9     		cbnz	r0, .L23
+ 183:Core/Src/stepper.c **** 	{
+ 184:Core/Src/stepper.c **** 	case 0:
+ 185:Core/Src/stepper.c **** 		PUL_Port = (uint32_t)GPIOA, PUL_Pin = GPIO_PIN_8, DIR_Pin = GPIO_PIN_15;
+ 186:Core/Src/stepper.c **** 		Speed = 100;
+ 219              		.loc 1 186 9 is_stmt 0 view .LVU48
+ 220 0012 6426     		movs	r6, #100
+ 185:Core/Src/stepper.c **** 		Speed = 100;
+ 221              		.loc 1 185 61 view .LVU49
+ 222 0014 4FF40041 		mov	r1, #32768
+ 223              	.LVL27:
+ 185:Core/Src/stepper.c **** 		Speed = 100;
+ 224              		.loc 1 185 39 view .LVU50
+ 225 0018 4FF48075 		mov	r5, #256
+ 185:Core/Src/stepper.c **** 		Speed = 100;
+ 226              		.loc 1 185 12 view .LVU51
+ 227 001c 154F     		ldr	r7, .L25
+ 228              	.L17:
+ 229              	.LVL28:
+ 187:Core/Src/stepper.c **** 		break;
+ 188:Core/Src/stepper.c **** 	case 1:
+ 189:Core/Src/stepper.c **** 		PUL_Port  = (uint32_t)GPIOA, PUL_Pin = GPIO_PIN_15, DIR_Pin = GPIO_PIN_3;
+ 190:Core/Src/stepper.c **** 		Speed = 25;
+ 191:Core/Src/stepper.c **** 		break;
+ 192:Core/Src/stepper.c **** 	case 2:
+ 193:Core/Src/stepper.c **** 		PUL_Port  =(uint32_t)GPIOB, PUL_Pin = GPIO_PIN_4, DIR_Pin = GPIO_PIN_5;
+ 194:Core/Src/stepper.c **** 		Speed = 25;
+ 195:Core/Src/stepper.c **** 		break;
+ 196:Core/Src/stepper.c **** 	}
+ 197:Core/Src/stepper.c ****     
+ 198:Core/Src/stepper.c **** 	HAL_GPIO_WritePin(GPIOB, DIR_Pin, Direction); // задаём направление
+ 230              		.loc 1 198 2 is_stmt 1 view .LVU52
+ 231 001e 1A46     		mov	r2, r3
+ 232              	.LVL29:
+ 233              		.loc 1 198 2 is_stmt 0 view .LVU53
+ 234 0020 1548     		ldr	r0, .L25+4
+ 235              	.LVL30:
+ 236              		.loc 1 198 2 view .LVU54
+ 237 0022 FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 238              	.LVL31:
+ 199:Core/Src/stepper.c **** 	
+ 200:Core/Src/stepper.c ****     /*Шагаем пока кол-во шагов не опустится до нуля или е�
+ 201:Core/Src/stepper.c **** 	while (Steps != 0 && flag == 0) 
+ 239              		.loc 1 201 2 is_stmt 1 view .LVU55
+ 240              		.loc 1 201 8 is_stmt 0 view .LVU56
+ 241 0026 1FE0     		b	.L18
+ 242              	.LVL32:
+ 243              	.L21:
+ 190:Core/Src/stepper.c **** 		break;
+ 244              		.loc 1 190 9 view .LVU57
+ 245 0028 1926     		movs	r6, #25
+ 189:Core/Src/stepper.c **** 		Speed = 25;
+ 246              		.loc 1 189 63 view .LVU58
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 9
+
+
+ 247 002a 0821     		movs	r1, #8
+ 248              	.LVL33:
+ 189:Core/Src/stepper.c **** 		Speed = 25;
+ 249              		.loc 1 189 40 view .LVU59
+ 250 002c 4FF40045 		mov	r5, #32768
+ 189:Core/Src/stepper.c **** 		Speed = 25;
+ 251              		.loc 1 189 13 view .LVU60
+ 252 0030 104F     		ldr	r7, .L25
+ 253 0032 F4E7     		b	.L17
+ 254              	.LVL34:
+ 255              	.L22:
+ 194:Core/Src/stepper.c **** 		break;
+ 256              		.loc 1 194 9 view .LVU61
+ 257 0034 1926     		movs	r6, #25
+ 193:Core/Src/stepper.c **** 		Speed = 25;
+ 258              		.loc 1 193 61 view .LVU62
+ 259 0036 2021     		movs	r1, #32
+ 260              	.LVL35:
+ 193:Core/Src/stepper.c **** 		Speed = 25;
+ 261              		.loc 1 193 39 view .LVU63
+ 262 0038 1025     		movs	r5, #16
+ 193:Core/Src/stepper.c **** 		Speed = 25;
+ 263              		.loc 1 193 13 view .LVU64
+ 264 003a 0F4F     		ldr	r7, .L25+4
+ 265 003c EFE7     		b	.L17
+ 266              	.LVL36:
+ 267              	.L23:
+ 182:Core/Src/stepper.c **** 	{
+ 268              		.loc 1 182 2 view .LVU65
+ 269 003e 0026     		movs	r6, #0
+ 270 0040 3146     		mov	r1, r6
+ 271              	.LVL37:
+ 182:Core/Src/stepper.c **** 	{
+ 272              		.loc 1 182 2 view .LVU66
+ 273 0042 3746     		mov	r7, r6
+ 274 0044 EBE7     		b	.L17
+ 275              	.LVL38:
+ 276              	.L20:
+ 202:Core/Src/stepper.c **** 	{
+ 203:Core/Src/stepper.c **** 		/*Делаем шаг*/
+ 204:Core/Src/stepper.c **** 		HAL_GPIO_WritePin((GPIO_TypeDef *)PUL_Port, PUL_Pin, GPIO_PIN_SET); // Выставляем вы�
+ 277              		.loc 1 204 3 is_stmt 1 view .LVU67
+ 278 0046 0122     		movs	r2, #1
+ 279 0048 2946     		mov	r1, r5
+ 280 004a 3846     		mov	r0, r7
+ 281 004c FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 282              	.LVL39:
+ 205:Core/Src/stepper.c **** 		us_delay(Speed); //Держим уровень в соотвествии с заданной дл
+ 283              		.loc 1 205 3 view .LVU68
+ 284 0050 3046     		mov	r0, r6
+ 285 0052 FFF7FEFF 		bl	us_delay
+ 286              	.LVL40:
+ 206:Core/Src/stepper.c **** 		HAL_GPIO_WritePin((GPIO_TypeDef *)PUL_Port, PUL_Pin, GPIO_PIN_RESET); // Выставляем в�
+ 287              		.loc 1 206 3 view .LVU69
+ 288 0056 0022     		movs	r2, #0
+ 289 0058 2946     		mov	r1, r5
+ 290 005a 3846     		mov	r0, r7
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 10
+
+
+ 291 005c FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 292              	.LVL41:
+ 207:Core/Src/stepper.c **** 		us_delay(Speed); //Держим уровень в соотвествии с заданной дл
+ 293              		.loc 1 207 3 view .LVU70
+ 294 0060 3046     		mov	r0, r6
+ 295 0062 FFF7FEFF 		bl	us_delay
+ 296              	.LVL42:
+ 208:Core/Src/stepper.c **** 		/*Вычитаем шаг*/
+ 209:Core/Src/stepper.c **** 		--Steps;
+ 297              		.loc 1 209 3 view .LVU71
+ 298 0066 013C     		subs	r4, r4, #1
+ 299              	.LVL43:
+ 300              	.L18:
+ 201:Core/Src/stepper.c **** 	{
+ 301              		.loc 1 201 20 view .LVU72
+ 302 0068 1CB1     		cbz	r4, .L16
+ 201:Core/Src/stepper.c **** 	{
+ 303              		.loc 1 201 28 is_stmt 0 discriminator 1 view .LVU73
+ 304 006a 044B     		ldr	r3, .L25+8
+ 305 006c 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 201:Core/Src/stepper.c **** 	{
+ 306              		.loc 1 201 20 discriminator 1 view .LVU74
+ 307 006e 002B     		cmp	r3, #0
+ 308 0070 E9D0     		beq	.L20
+ 309              	.L16:
+ 210:Core/Src/stepper.c **** 	}
+ 211:Core/Src/stepper.c **** }
+ 310              		.loc 1 211 1 view .LVU75
+ 311 0072 F8BD     		pop	{r3, r4, r5, r6, r7, pc}
+ 312              	.LVL44:
+ 313              	.L26:
+ 314              		.loc 1 211 1 view .LVU76
+ 315              		.align	2
+ 316              	.L25:
+ 317 0074 00080140 		.word	1073809408
+ 318 0078 000C0140 		.word	1073810432
+ 319 007c 00000000 		.word	flag
+ 320              		.cfi_endproc
+ 321              	.LFE70:
+ 323              		.section	.text.Stepper_Angle,"ax",%progbits
+ 324              		.align	1
+ 325              		.global	Stepper_Angle
+ 326              		.syntax unified
+ 327              		.thumb
+ 328              		.thumb_func
+ 330              	Stepper_Angle:
+ 331              	.LVL45:
+ 332              	.LFB68:
+ 110:Core/Src/stepper.c **** 	/*Вспомогательные переменные*/ 
+ 333              		.loc 1 110 1 is_stmt 1 view -0
+ 334              		.cfi_startproc
+ 335              		@ args = 0, pretend = 0, frame = 0
+ 336              		@ frame_needed = 0, uses_anonymous_args = 0
+ 110:Core/Src/stepper.c **** 	/*Вспомогательные переменные*/ 
+ 337              		.loc 1 110 1 is_stmt 0 view .LVU78
+ 338 0000 2DE9F041 		push	{r4, r5, r6, r7, r8, lr}
+ 339              	.LCFI2:
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 11
+
+
+ 340              		.cfi_def_cfa_offset 24
+ 341              		.cfi_offset 4, -24
+ 342              		.cfi_offset 5, -20
+ 343              		.cfi_offset 6, -16
+ 344              		.cfi_offset 7, -12
+ 345              		.cfi_offset 8, -8
+ 346              		.cfi_offset 14, -4
+ 347 0004 0446     		mov	r4, r0
+ 348 0006 0E46     		mov	r6, r1
+ 112:Core/Src/stepper.c **** 	uint8_t gear_ratio = 0;           // для определения передаточного чи
+ 349              		.loc 1 112 2 is_stmt 1 view .LVU79
+ 350              	.LVL46:
+ 113:Core/Src/stepper.c ****   	bool Direction = 0;               // для направления вращения
+ 351              		.loc 1 113 2 view .LVU80
+ 114:Core/Src/stepper.c **** 
+ 352              		.loc 1 114 4 view .LVU81
+ 118:Core/Src/stepper.c **** 	{                
+ 353              		.loc 1 118 2 view .LVU82
+ 354 0008 0128     		cmp	r0, #1
+ 355 000a 08D0     		beq	.L32
+ 356 000c 0228     		cmp	r0, #2
+ 357 000e 0AD0     		beq	.L33
+ 358 0010 0028     		cmp	r0, #0
+ 359 0012 45D1     		bne	.L34
+ 121:Core/Src/stepper.c **** 		break;
+ 360              		.loc 1 121 46 is_stmt 0 view .LVU83
+ 361 0014 4FF00608 		mov	r8, #6
+ 121:Core/Src/stepper.c **** 		break;
+ 362              		.loc 1 121 13 view .LVU84
+ 363 0018 4FF4B475 		mov	r5, #360
+ 364 001c 06E0     		b	.L28
+ 365              	.L32:
+ 124:Core/Src/stepper.c **** 		break;
+ 366              		.loc 1 124 46 view .LVU85
+ 367 001e 4FF06308 		mov	r8, #99
+ 124:Core/Src/stepper.c **** 		break;
+ 368              		.loc 1 124 13 view .LVU86
+ 369 0022 B425     		movs	r5, #180
+ 370 0024 02E0     		b	.L28
+ 371              	.L33:
+ 127:Core/Src/stepper.c **** 		break;
+ 372              		.loc 1 127 46 view .LVU87
+ 373 0026 4FF05108 		mov	r8, #81
+ 127:Core/Src/stepper.c **** 		break;
+ 374              		.loc 1 127 13 view .LVU88
+ 375 002a B425     		movs	r5, #180
+ 376              	.L28:
+ 377              	.LVL47:
+ 133:Core/Src/stepper.c **** 	if (Angle > max_angle) Angle = max_angle; 
+ 378              		.loc 1 133 2 is_stmt 1 view .LVU89
+ 133:Core/Src/stepper.c **** 	if (Angle > max_angle) Angle = max_angle; 
+ 379              		.loc 1 133 5 is_stmt 0 view .LVU90
+ 380 002c 0021     		movs	r1, #0
+ 381              	.LVL48:
+ 133:Core/Src/stepper.c **** 	if (Angle > max_angle) Angle = max_angle; 
+ 382              		.loc 1 133 5 view .LVU91
+ 383 002e 3046     		mov	r0, r6
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 12
+
+
+ 384              	.LVL49:
+ 133:Core/Src/stepper.c **** 	if (Angle > max_angle) Angle = max_angle; 
+ 385              		.loc 1 133 5 view .LVU92
+ 386 0030 FFF7FEFF 		bl	__aeabi_fcmplt
+ 387              	.LVL50:
+ 388 0034 0028     		cmp	r0, #0
+ 389 0036 37D1     		bne	.L38
+ 390              	.LVL51:
+ 391              	.L29:
+ 134:Core/Src/stepper.c **** 
+ 392              		.loc 1 134 2 is_stmt 1 view .LVU93
+ 134:Core/Src/stepper.c **** 
+ 393              		.loc 1 134 12 is_stmt 0 view .LVU94
+ 394 0038 2846     		mov	r0, r5
+ 395 003a FFF7FEFF 		bl	__aeabi_i2f
+ 396              	.LVL52:
+ 397 003e 0546     		mov	r5, r0
+ 398              	.LVL53:
+ 134:Core/Src/stepper.c **** 
+ 399              		.loc 1 134 5 view .LVU95
+ 400 0040 3146     		mov	r1, r6
+ 401 0042 FFF7FEFF 		bl	__aeabi_fcmplt
+ 402              	.LVL54:
+ 403 0046 00B9     		cbnz	r0, .L30
+ 404 0048 3546     		mov	r5, r6
+ 405              	.L30:
+ 406              	.LVL55:
+ 137:Core/Src/stepper.c ****     
+ 407              		.loc 1 137 2 is_stmt 1 view .LVU96
+ 137:Core/Src/stepper.c ****     
+ 408              		.loc 1 137 9 is_stmt 0 view .LVU97
+ 409 004a 194B     		ldr	r3, .L39
+ 410 004c 53F82460 		ldr	r6, [r3, r4, lsl #2]	@ float
+ 137:Core/Src/stepper.c ****     
+ 411              		.loc 1 137 5 view .LVU98
+ 412 0050 2946     		mov	r1, r5
+ 413 0052 3046     		mov	r0, r6
+ 414 0054 FFF7FEFF 		bl	__aeabi_fcmplt
+ 415              	.LVL56:
+ 416 0058 40BB     		cbnz	r0, .L36
+ 114:Core/Src/stepper.c **** 
+ 417              		.loc 1 114 9 view .LVU99
+ 418 005a 0027     		movs	r7, #0
+ 419              	.L31:
+ 420              	.LVL57:
+ 140:Core/Src/stepper.c **** 
+ 421              		.loc 1 140 2 is_stmt 1 view .LVU100
+ 140:Core/Src/stepper.c **** 
+ 422              		.loc 1 140 25 is_stmt 0 view .LVU101
+ 423 005c 2946     		mov	r1, r5
+ 424 005e 3046     		mov	r0, r6
+ 425 0060 FFF7FEFF 		bl	__aeabi_fsub
+ 426              	.LVL58:
+ 140:Core/Src/stepper.c **** 
+ 427              		.loc 1 140 10 view .LVU102
+ 428 0064 20F00046 		bic	r6, r0, #-2147483648
+ 140:Core/Src/stepper.c **** 
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 13
+
+
+ 429              		.loc 1 140 58 view .LVU103
+ 430 0068 4046     		mov	r0, r8
+ 431 006a FFF7FEFF 		bl	__aeabi_i2f
+ 432              	.LVL59:
+ 433 006e 1149     		ldr	r1, .L39+4
+ 434 0070 FFF7FEFF 		bl	__aeabi_fmul
+ 435              	.LVL60:
+ 140:Core/Src/stepper.c **** 
+ 436              		.loc 1 140 71 view .LVU104
+ 437 0074 1049     		ldr	r1, .L39+8
+ 438 0076 FFF7FEFF 		bl	__aeabi_fdiv
+ 439              	.LVL61:
+ 440 007a 0146     		mov	r1, r0
+ 140:Core/Src/stepper.c **** 
+ 441              		.loc 1 140 34 view .LVU105
+ 442 007c 3046     		mov	r0, r6
+ 443 007e FFF7FEFF 		bl	__aeabi_fmul
+ 444              	.LVL62:
+ 140:Core/Src/stepper.c **** 
+ 445              		.loc 1 140 8 view .LVU106
+ 446 0082 0E4B     		ldr	r3, .L39+12
+ 447 0084 1860     		str	r0, [r3]	@ float
+ 143:Core/Src/stepper.c ****     
+ 448              		.loc 1 143 2 is_stmt 1 view .LVU107
+ 143:Core/Src/stepper.c ****     
+ 449              		.loc 1 143 12 is_stmt 0 view .LVU108
+ 450 0086 0A4A     		ldr	r2, .L39
+ 451 0088 42F82450 		str	r5, [r2, r4, lsl #2]	@ float
+ 146:Core/Src/stepper.c **** }
+ 452              		.loc 1 146 5 is_stmt 1 view .LVU109
+ 453 008c 1868     		ldr	r0, [r3]	@ float
+ 454 008e FFF7FEFF 		bl	__aeabi_f2uiz
+ 455              	.LVL63:
+ 456 0092 0246     		mov	r2, r0
+ 457 0094 3946     		mov	r1, r7
+ 458 0096 2046     		mov	r0, r4
+ 459 0098 FFF7FEFF 		bl	Stepper_Step
+ 460              	.LVL64:
+ 147:Core/Src/stepper.c **** 
+ 461              		.loc 1 147 1 is_stmt 0 view .LVU110
+ 462 009c BDE8F081 		pop	{r4, r5, r6, r7, r8, pc}
+ 463              	.LVL65:
+ 464              	.L34:
+ 118:Core/Src/stepper.c **** 	{                
+ 465              		.loc 1 118 2 view .LVU111
+ 466 00a0 4FF00008 		mov	r8, #0
+ 467 00a4 4546     		mov	r5, r8
+ 468 00a6 C1E7     		b	.L28
+ 469              	.LVL66:
+ 470              	.L38:
+ 133:Core/Src/stepper.c **** 	if (Angle > max_angle) Angle = max_angle; 
+ 471              		.loc 1 133 31 discriminator 1 view .LVU112
+ 472 00a8 0026     		movs	r6, #0
+ 473              	.LVL67:
+ 133:Core/Src/stepper.c **** 	if (Angle > max_angle) Angle = max_angle; 
+ 474              		.loc 1 133 31 discriminator 1 view .LVU113
+ 475 00aa C5E7     		b	.L29
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 14
+
+
+ 476              	.LVL68:
+ 477              	.L36:
+ 137:Core/Src/stepper.c ****     
+ 478              		.loc 1 137 35 discriminator 1 view .LVU114
+ 479 00ac 0127     		movs	r7, #1
+ 480 00ae D5E7     		b	.L31
+ 481              	.L40:
+ 482              		.align	2
+ 483              	.L39:
+ 484 00b0 00000000 		.word	pos
+ 485 00b4 0000C845 		.word	1170735104
+ 486 00b8 0000B443 		.word	1135869952
+ 487 00bc 00000000 		.word	Steps
+ 488              		.cfi_endproc
+ 489              	.LFE68:
+ 491              		.section	.text.inv_kin,"ax",%progbits
+ 492              		.align	1
+ 493              		.global	inv_kin
+ 494              		.syntax unified
+ 495              		.thumb
+ 496              		.thumb_func
+ 498              	inv_kin:
+ 499              	.LVL69:
+ 500              	.LFB66:
+  39:Core/Src/stepper.c **** 	float alfa, betta, gamma, delta; // Выходные значения
+ 501              		.loc 1 39 1 is_stmt 1 view -0
+ 502              		.cfi_startproc
+ 503              		@ args = 0, pretend = 0, frame = 8
+ 504              		@ frame_needed = 0, uses_anonymous_args = 0
+  39:Core/Src/stepper.c **** 	float alfa, betta, gamma, delta; // Выходные значения
+ 505              		.loc 1 39 1 is_stmt 0 view .LVU116
+ 506 0000 2DE9F04F 		push	{r4, r5, r6, r7, r8, r9, r10, fp, lr}
+ 507              	.LCFI3:
+ 508              		.cfi_def_cfa_offset 36
+ 509              		.cfi_offset 4, -36
+ 510              		.cfi_offset 5, -32
+ 511              		.cfi_offset 6, -28
+ 512              		.cfi_offset 7, -24
+ 513              		.cfi_offset 8, -20
+ 514              		.cfi_offset 9, -16
+ 515              		.cfi_offset 10, -12
+ 516              		.cfi_offset 11, -8
+ 517              		.cfi_offset 14, -4
+ 518 0004 83B0     		sub	sp, sp, #12
+ 519              	.LCFI4:
+ 520              		.cfi_def_cfa_offset 48
+ 521 0006 8046     		mov	r8, r0
+ 522 0008 0E46     		mov	r6, r1
+ 523 000a 1746     		mov	r7, r2
+  40:Core/Src/stepper.c **** 	float L, P, c, b1, b2; // Промежуточные переменные
+ 524              		.loc 1 40 2 is_stmt 1 view .LVU117
+  41:Core/Src/stepper.c **** 
+ 525              		.loc 1 41 2 view .LVU118
+  43:Core/Src/stepper.c **** 
+ 526              		.loc 1 43 2 view .LVU119
+  43:Core/Src/stepper.c **** 
+ 527              		.loc 1 43 9 is_stmt 0 view .LVU120
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 15
+
+
+ 528 000c 0846     		mov	r0, r1
+ 529              	.LVL70:
+  43:Core/Src/stepper.c **** 
+ 530              		.loc 1 43 9 view .LVU121
+ 531 000e FFF7FEFF 		bl	__aeabi_i2f
+ 532              	.LVL71:
+  43:Core/Src/stepper.c **** 
+ 533              		.loc 1 43 9 view .LVU122
+ 534 0012 0446     		mov	r4, r0
+ 535 0014 4046     		mov	r0, r8
+ 536 0016 FFF7FEFF 		bl	__aeabi_i2f
+ 537              	.LVL72:
+ 538 001a 2146     		mov	r1, r4
+ 539 001c FFF7FEFF 		bl	atan2f
+ 540              	.LVL73:
+  43:Core/Src/stepper.c **** 
+ 541              		.loc 1 43 7 discriminator 1 view .LVU123
+ 542 0020 7349     		ldr	r1, .L43+32
+ 543 0022 FFF7FEFF 		bl	__aeabi_fadd
+ 544              	.LVL74:
+ 545 0026 0090     		str	r0, [sp]	@ float
+ 546              	.LVL75:
+  45:Core/Src/stepper.c **** 	L = sqrt(pow(P, 2) + pow(A - D - z, 2)); // расчёт расстояния между перв�
+ 547              		.loc 1 45 5 is_stmt 1 view .LVU124
+  45:Core/Src/stepper.c **** 	L = sqrt(pow(P, 2) + pow(A - D - z, 2)); // расчёт расстояния между перв�
+ 548              		.loc 1 45 14 is_stmt 0 view .LVU125
+ 549 0028 0024     		movs	r4, #0
+ 550 002a 4FF08045 		mov	r5, #1073741824
+ 551 002e 4046     		mov	r0, r8
+ 552              	.LVL76:
+  45:Core/Src/stepper.c **** 	L = sqrt(pow(P, 2) + pow(A - D - z, 2)); // расчёт расстояния между перв�
+ 553              		.loc 1 45 14 view .LVU126
+ 554 0030 FFF7FEFF 		bl	__aeabi_i2d
+ 555              	.LVL77:
+ 556 0034 2246     		mov	r2, r4
+ 557 0036 2B46     		mov	r3, r5
+ 558 0038 FFF7FEFF 		bl	pow
+ 559              	.LVL78:
+ 560 003c 8046     		mov	r8, r0
+ 561              	.LVL79:
+  45:Core/Src/stepper.c **** 	L = sqrt(pow(P, 2) + pow(A - D - z, 2)); // расчёт расстояния между перв�
+ 562              		.loc 1 45 14 view .LVU127
+ 563 003e 8946     		mov	r9, r1
+  45:Core/Src/stepper.c **** 	L = sqrt(pow(P, 2) + pow(A - D - z, 2)); // расчёт расстояния между перв�
+ 564              		.loc 1 45 26 discriminator 1 view .LVU128
+ 565 0040 3046     		mov	r0, r6
+ 566 0042 FFF7FEFF 		bl	__aeabi_i2d
+ 567              	.LVL80:
+ 568 0046 2246     		mov	r2, r4
+ 569 0048 2B46     		mov	r3, r5
+ 570 004a FFF7FEFF 		bl	pow
+ 571              	.LVL81:
+ 572 004e 0246     		mov	r2, r0
+ 573 0050 0B46     		mov	r3, r1
+  45:Core/Src/stepper.c **** 	L = sqrt(pow(P, 2) + pow(A - D - z, 2)); // расчёт расстояния между перв�
+ 574              		.loc 1 45 9 discriminator 2 view .LVU129
+ 575 0052 4046     		mov	r0, r8
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 16
+
+
+ 576 0054 4946     		mov	r1, r9
+ 577 0056 FFF7FEFF 		bl	__aeabi_dadd
+ 578              	.LVL82:
+ 579 005a FFF7FEFF 		bl	sqrt
+ 580              	.LVL83:
+  45:Core/Src/stepper.c **** 	L = sqrt(pow(P, 2) + pow(A - D - z, 2)); // расчёт расстояния между перв�
+ 581              		.loc 1 45 37 discriminator 3 view .LVU130
+ 582 005e 0022     		movs	r2, #0
+ 583 0060 644B     		ldr	r3, .L43+36
+ 584 0062 FFF7FEFF 		bl	__aeabi_dsub
+ 585              	.LVL84:
+  45:Core/Src/stepper.c **** 	L = sqrt(pow(P, 2) + pow(A - D - z, 2)); // расчёт расстояния между перв�
+ 586              		.loc 1 45 7 discriminator 3 view .LVU131
+ 587 0066 FFF7FEFF 		bl	__aeabi_d2f
+ 588              	.LVL85:
+ 589 006a 8346     		mov	fp, r0
+ 590              	.LVL86:
+  46:Core/Src/stepper.c ****     
+ 591              		.loc 1 46 2 is_stmt 1 view .LVU132
+  46:Core/Src/stepper.c ****     
+ 592              		.loc 1 46 11 is_stmt 0 view .LVU133
+ 593 006c FFF7FEFF 		bl	__aeabi_f2d
+ 594              	.LVL87:
+  46:Core/Src/stepper.c ****     
+ 595              		.loc 1 46 11 view .LVU134
+ 596 0070 2246     		mov	r2, r4
+ 597 0072 2B46     		mov	r3, r5
+ 598 0074 FFF7FEFF 		bl	pow
+ 599              	.LVL88:
+ 600 0078 8046     		mov	r8, r0
+ 601 007a 8946     		mov	r9, r1
+  46:Core/Src/stepper.c ****     
+ 602              		.loc 1 46 23 discriminator 1 view .LVU135
+ 603 007c C7F13000 		rsb	r0, r7, #48
+ 604 0080 FFF7FEFF 		bl	__aeabi_i2d
+ 605              	.LVL89:
+ 606 0084 2246     		mov	r2, r4
+ 607 0086 2B46     		mov	r3, r5
+ 608 0088 FFF7FEFF 		bl	pow
+ 609              	.LVL90:
+ 610 008c 0246     		mov	r2, r0
+ 611 008e 0B46     		mov	r3, r1
+  46:Core/Src/stepper.c ****     
+ 612              		.loc 1 46 6 discriminator 2 view .LVU136
+ 613 0090 4046     		mov	r0, r8
+ 614 0092 4946     		mov	r1, r9
+ 615 0094 FFF7FEFF 		bl	__aeabi_dadd
+ 616              	.LVL91:
+ 617 0098 FFF7FEFF 		bl	sqrt
+ 618              	.LVL92:
+  46:Core/Src/stepper.c ****     
+ 619              		.loc 1 46 4 discriminator 3 view .LVU137
+ 620 009c FFF7FEFF 		bl	__aeabi_d2f
+ 621              	.LVL93:
+ 622 00a0 8246     		mov	r10, r0
+ 623              	.LVL94:
+  49:Core/Src/stepper.c ****     
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 17
+
+
+ 624              		.loc 1 49 2 is_stmt 1 view .LVU138
+  49:Core/Src/stepper.c ****     
+ 625              		.loc 1 49 37 is_stmt 0 view .LVU139
+ 626 00a2 FFF7FEFF 		bl	__aeabi_f2d
+ 627              	.LVL95:
+  49:Core/Src/stepper.c ****     
+ 628              		.loc 1 49 37 view .LVU140
+ 629 00a6 8046     		mov	r8, r0
+ 630 00a8 8946     		mov	r9, r1
+ 631 00aa 2246     		mov	r2, r4
+ 632 00ac 2B46     		mov	r3, r5
+ 633 00ae FFF7FEFF 		bl	pow
+ 634              	.LVL96:
+ 635 00b2 0246     		mov	r2, r0
+ 636 00b4 0B46     		mov	r3, r1
+  49:Core/Src/stepper.c ****     
+ 637              		.loc 1 49 35 discriminator 1 view .LVU141
+ 638 00b6 46A1     		adr	r1, .L43
+ 639 00b8 D1E90001 		ldrd	r0, [r1]
+ 640 00bc FFF7FEFF 		bl	__aeabi_dsub
+ 641              	.LVL97:
+  49:Core/Src/stepper.c ****     
+ 642              		.loc 1 49 6 discriminator 1 view .LVU142
+ 643 00c0 45A3     		adr	r3, .L43+8
+ 644 00c2 D3E90023 		ldrd	r2, [r3]
+ 645 00c6 FFF7FEFF 		bl	__aeabi_ddiv
+ 646              	.LVL98:
+ 647 00ca FFF7FEFF 		bl	acos
+ 648              	.LVL99:
+  49:Core/Src/stepper.c ****     
+ 649              		.loc 1 49 4 discriminator 2 view .LVU143
+ 650 00ce FFF7FEFF 		bl	__aeabi_d2f
+ 651              	.LVL100:
+ 652 00d2 0646     		mov	r6, r0
+ 653              	.LVL101:
+  51:Core/Src/stepper.c ****     
+ 654              		.loc 1 51 2 is_stmt 1 view .LVU144
+  51:Core/Src/stepper.c ****     
+ 655              		.loc 1 51 8 is_stmt 0 view .LVU145
+ 656 00d4 0146     		mov	r1, r0
+ 657 00d6 4848     		ldr	r0, .L43+40
+ 658              	.LVL102:
+  51:Core/Src/stepper.c ****     
+ 659              		.loc 1 51 8 view .LVU146
+ 660 00d8 FFF7FEFF 		bl	__aeabi_fsub
+ 661              	.LVL103:
+  51:Core/Src/stepper.c ****     
+ 662              		.loc 1 51 8 view .LVU147
+ 663 00dc 0190     		str	r0, [sp, #4]	@ float
+ 664              	.LVL104:
+  54:Core/Src/stepper.c **** 	b2 = atan((z + D - A) / P);
+ 665              		.loc 1 54 2 is_stmt 1 view .LVU148
+  54:Core/Src/stepper.c **** 	b2 = atan((z + D - A) / P);
+ 666              		.loc 1 54 25 is_stmt 0 view .LVU149
+ 667 00de 2246     		mov	r2, r4
+ 668 00e0 2B46     		mov	r3, r5
+ 669 00e2 4046     		mov	r0, r8
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 18
+
+
+ 670              	.LVL105:
+  54:Core/Src/stepper.c **** 	b2 = atan((z + D - A) / P);
+ 671              		.loc 1 54 25 view .LVU150
+ 672 00e4 4946     		mov	r1, r9
+ 673 00e6 FFF7FEFF 		bl	pow
+ 674              	.LVL106:
+  54:Core/Src/stepper.c **** 	b2 = atan((z + D - A) / P);
+ 675              		.loc 1 54 23 discriminator 1 view .LVU151
+ 676 00ea 3DA3     		adr	r3, .L43+16
+ 677 00ec D3E90023 		ldrd	r2, [r3]
+ 678 00f0 FFF7FEFF 		bl	__aeabi_dadd
+ 679              	.LVL107:
+  54:Core/Src/stepper.c **** 	b2 = atan((z + D - A) / P);
+ 680              		.loc 1 54 35 discriminator 1 view .LVU152
+ 681 00f4 3CA3     		adr	r3, .L43+24
+ 682 00f6 D3E90023 		ldrd	r2, [r3]
+ 683 00fa FFF7FEFF 		bl	__aeabi_dsub
+ 684              	.LVL108:
+ 685 00fe 0446     		mov	r4, r0
+ 686 0100 0D46     		mov	r5, r1
+  54:Core/Src/stepper.c **** 	b2 = atan((z + D - A) / P);
+ 687              		.loc 1 54 59 discriminator 1 view .LVU153
+ 688 0102 3E49     		ldr	r1, .L43+44
+ 689 0104 5046     		mov	r0, r10
+ 690 0106 FFF7FEFF 		bl	__aeabi_fmul
+ 691              	.LVL109:
+ 692 010a FFF7FEFF 		bl	__aeabi_f2d
+ 693              	.LVL110:
+ 694 010e 0246     		mov	r2, r0
+ 695 0110 0B46     		mov	r3, r1
+  54:Core/Src/stepper.c **** 	b2 = atan((z + D - A) / P);
+ 696              		.loc 1 54 7 discriminator 1 view .LVU154
+ 697 0112 2046     		mov	r0, r4
+ 698 0114 2946     		mov	r1, r5
+ 699 0116 FFF7FEFF 		bl	__aeabi_ddiv
+ 700              	.LVL111:
+ 701 011a FFF7FEFF 		bl	acos
+ 702              	.LVL112:
+  54:Core/Src/stepper.c **** 	b2 = atan((z + D - A) / P);
+ 703              		.loc 1 54 5 discriminator 2 view .LVU155
+ 704 011e FFF7FEFF 		bl	__aeabi_d2f
+ 705              	.LVL113:
+ 706 0122 0546     		mov	r5, r0
+ 707              	.LVL114:
+  55:Core/Src/stepper.c **** 
+ 708              		.loc 1 55 2 is_stmt 1 view .LVU156
+  55:Core/Src/stepper.c **** 
+ 709              		.loc 1 55 24 is_stmt 0 view .LVU157
+ 710 0124 A7F13000 		sub	r0, r7, #48
+ 711              	.LVL115:
+  55:Core/Src/stepper.c **** 
+ 712              		.loc 1 55 24 view .LVU158
+ 713 0128 FFF7FEFF 		bl	__aeabi_i2f
+ 714              	.LVL116:
+ 715 012c 5946     		mov	r1, fp
+ 716 012e FFF7FEFF 		bl	__aeabi_fdiv
+ 717              	.LVL117:
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 19
+
+
+  55:Core/Src/stepper.c **** 
+ 718              		.loc 1 55 7 view .LVU159
+ 719 0132 FFF7FEFF 		bl	__aeabi_f2d
+ 720              	.LVL118:
+ 721 0136 FFF7FEFF 		bl	atan
+ 722              	.LVL119:
+  55:Core/Src/stepper.c **** 
+ 723              		.loc 1 55 5 discriminator 1 view .LVU160
+ 724 013a FFF7FEFF 		bl	__aeabi_d2f
+ 725              	.LVL120:
+ 726 013e 0446     		mov	r4, r0
+ 727              	.LVL121:
+  57:Core/Src/stepper.c **** 
+ 728              		.loc 1 57 2 is_stmt 1 view .LVU161
+  57:Core/Src/stepper.c **** 
+ 729              		.loc 1 57 8 is_stmt 0 view .LVU162
+ 730 0140 0146     		mov	r1, r0
+ 731 0142 2846     		mov	r0, r5
+ 732              	.LVL122:
+  57:Core/Src/stepper.c **** 
+ 733              		.loc 1 57 8 view .LVU163
+ 734 0144 FFF7FEFF 		bl	__aeabi_fadd
+ 735              	.LVL123:
+  57:Core/Src/stepper.c **** 
+ 736              		.loc 1 57 8 view .LVU164
+ 737 0148 8046     		mov	r8, r0
+ 738              	.LVL124:
+  59:Core/Src/stepper.c ****     
+ 739              		.loc 1 59 2 is_stmt 1 view .LVU165
+  59:Core/Src/stepper.c ****     
+ 740              		.loc 1 59 13 is_stmt 0 view .LVU166
+ 741 014a 2946     		mov	r1, r5
+ 742 014c 2A48     		ldr	r0, .L43+40
+ 743              	.LVL125:
+  59:Core/Src/stepper.c ****     
+ 744              		.loc 1 59 13 view .LVU167
+ 745 014e FFF7FEFF 		bl	__aeabi_fsub
+ 746              	.LVL126:
+  59:Core/Src/stepper.c ****     
+ 747              		.loc 1 59 18 view .LVU168
+ 748 0152 2146     		mov	r1, r4
+ 749 0154 FFF7FEFF 		bl	__aeabi_fsub
+ 750              	.LVL127:
+  59:Core/Src/stepper.c ****     
+ 751              		.loc 1 59 8 view .LVU169
+ 752 0158 3146     		mov	r1, r6
+ 753 015a FFF7FEFF 		bl	__aeabi_fsub
+ 754              	.LVL128:
+ 755 015e 0646     		mov	r6, r0
+ 756              	.LVL129:
+  62:Core/Src/stepper.c **** 	betta = betta * 180 / pi;
+ 757              		.loc 1 62 2 is_stmt 1 view .LVU170
+  62:Core/Src/stepper.c **** 	betta = betta * 180 / pi;
+ 758              		.loc 1 62 14 is_stmt 0 view .LVU171
+ 759 0160 2749     		ldr	r1, .L43+48
+ 760 0162 0098     		ldr	r0, [sp]	@ float
+ 761              	.LVL130:
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 20
+
+
+  62:Core/Src/stepper.c **** 	betta = betta * 180 / pi;
+ 762              		.loc 1 62 14 view .LVU172
+ 763 0164 FFF7FEFF 		bl	__aeabi_fmul
+ 764              	.LVL131:
+  62:Core/Src/stepper.c **** 	betta = betta * 180 / pi;
+ 765              		.loc 1 62 7 view .LVU173
+ 766 0168 2349     		ldr	r1, .L43+40
+ 767 016a FFF7FEFF 		bl	__aeabi_fdiv
+ 768              	.LVL132:
+ 769 016e 0746     		mov	r7, r0
+ 770              	.LVL133:
+  63:Core/Src/stepper.c **** 	gamma = gamma * 180 / pi;
+ 771              		.loc 1 63 2 is_stmt 1 view .LVU174
+  63:Core/Src/stepper.c **** 	gamma = gamma * 180 / pi;
+ 772              		.loc 1 63 16 is_stmt 0 view .LVU175
+ 773 0170 2349     		ldr	r1, .L43+48
+ 774 0172 4046     		mov	r0, r8
+ 775              	.LVL134:
+  63:Core/Src/stepper.c **** 	gamma = gamma * 180 / pi;
+ 776              		.loc 1 63 16 view .LVU176
+ 777 0174 FFF7FEFF 		bl	__aeabi_fmul
+ 778              	.LVL135:
+  63:Core/Src/stepper.c **** 	gamma = gamma * 180 / pi;
+ 779              		.loc 1 63 8 view .LVU177
+ 780 0178 1F49     		ldr	r1, .L43+40
+ 781 017a FFF7FEFF 		bl	__aeabi_fdiv
+ 782              	.LVL136:
+ 783 017e 0446     		mov	r4, r0
+ 784              	.LVL137:
+  64:Core/Src/stepper.c **** 	delta = delta * 180 / pi;
+ 785              		.loc 1 64 2 is_stmt 1 view .LVU178
+  64:Core/Src/stepper.c **** 	delta = delta * 180 / pi;
+ 786              		.loc 1 64 16 is_stmt 0 view .LVU179
+ 787 0180 1F49     		ldr	r1, .L43+48
+ 788 0182 0198     		ldr	r0, [sp, #4]	@ float
+ 789              	.LVL138:
+  64:Core/Src/stepper.c **** 	delta = delta * 180 / pi;
+ 790              		.loc 1 64 16 view .LVU180
+ 791 0184 FFF7FEFF 		bl	__aeabi_fmul
+ 792              	.LVL139:
+  64:Core/Src/stepper.c **** 	delta = delta * 180 / pi;
+ 793              		.loc 1 64 8 view .LVU181
+ 794 0188 1B49     		ldr	r1, .L43+40
+ 795 018a FFF7FEFF 		bl	__aeabi_fdiv
+ 796              	.LVL140:
+ 797 018e 0546     		mov	r5, r0
+ 798              	.LVL141:
+  65:Core/Src/stepper.c ****     
+ 799              		.loc 1 65 2 is_stmt 1 view .LVU182
+  65:Core/Src/stepper.c ****     
+ 800              		.loc 1 65 16 is_stmt 0 view .LVU183
+ 801 0190 1B49     		ldr	r1, .L43+48
+ 802 0192 3046     		mov	r0, r6
+ 803              	.LVL142:
+  65:Core/Src/stepper.c ****     
+ 804              		.loc 1 65 16 view .LVU184
+ 805 0194 FFF7FEFF 		bl	__aeabi_fmul
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 21
+
+
+ 806              	.LVL143:
+  65:Core/Src/stepper.c ****     
+ 807              		.loc 1 65 8 view .LVU185
+ 808 0198 1749     		ldr	r1, .L43+40
+ 809 019a FFF7FEFF 		bl	__aeabi_fdiv
+ 810              	.LVL144:
+ 811 019e 0646     		mov	r6, r0
+ 812              	.LVL145:
+  68:Core/Src/stepper.c **** 	Servo_SetAngle(0, delta);
+ 813              		.loc 1 68 2 is_stmt 1 view .LVU186
+ 814 01a0 3946     		mov	r1, r7
+ 815 01a2 0020     		movs	r0, #0
+ 816              	.LVL146:
+  68:Core/Src/stepper.c **** 	Servo_SetAngle(0, delta);
+ 817              		.loc 1 68 2 is_stmt 0 view .LVU187
+ 818 01a4 FFF7FEFF 		bl	Stepper_Angle
+ 819              	.LVL147:
+  69:Core/Src/stepper.c **** 	Stepper_Angle(2, gamma);
+ 820              		.loc 1 69 2 is_stmt 1 view .LVU188
+ 821 01a8 3146     		mov	r1, r6
+ 822 01aa 0020     		movs	r0, #0
+ 823 01ac FFF7FEFF 		bl	Servo_SetAngle
+ 824              	.LVL148:
+  70:Core/Src/stepper.c **** 	Stepper_Angle(1, betta);
+ 825              		.loc 1 70 2 view .LVU189
+ 826 01b0 2946     		mov	r1, r5
+ 827 01b2 0220     		movs	r0, #2
+ 828 01b4 FFF7FEFF 		bl	Stepper_Angle
+ 829              	.LVL149:
+  71:Core/Src/stepper.c **** 	
+ 830              		.loc 1 71 2 view .LVU190
+ 831 01b8 2146     		mov	r1, r4
+ 832 01ba 0120     		movs	r0, #1
+ 833 01bc FFF7FEFF 		bl	Stepper_Angle
+ 834              	.LVL150:
+  73:Core/Src/stepper.c **** 	
+ 835              		.loc 1 73 2 view .LVU191
+ 836 01c0 104B     		ldr	r3, .L43+52
+ 837 01c2 1622     		movs	r2, #22
+ 838 01c4 9A63     		str	r2, [r3, #56]
+  75:Core/Src/stepper.c **** 
+ 839              		.loc 1 75 1 is_stmt 0 view .LVU192
+ 840 01c6 03B0     		add	sp, sp, #12
+ 841              	.LCFI5:
+ 842              		.cfi_def_cfa_offset 36
+ 843              		@ sp needed
+ 844 01c8 BDE8F08F 		pop	{r4, r5, r6, r7, r8, r9, r10, fp, pc}
+ 845              	.LVL151:
+ 846              	.L44:
+  75:Core/Src/stepper.c **** 
+ 847              		.loc 1 75 1 view .LVU193
+ 848 01cc AFF30080 		.align	3
+ 849              	.L43:
+ 850 01d0 00000000 		.word	0
+ 851 01d4 8894E440 		.word	1088722056
+ 852 01d8 00000000 		.word	0
+ 853 01dc 80C7E340 		.word	1088669568
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 22
+
+
+ 854 01e0 00000000 		.word	0
+ 855 01e4 0044DA40 		.word	1088046080
+ 856 01e8 00000000 		.word	0
+ 857 01ec 20CACD40 		.word	1087228448
+ 858 01f0 DB0FC93F 		.word	1070141403
+ 859 01f4 00001440 		.word	1075052544
+ 860 01f8 DB0F4940 		.word	1078530011
+ 861 01fc 0000A443 		.word	1134821376
+ 862 0200 00003443 		.word	1127481344
+ 863 0204 00080040 		.word	1073743872
+ 864              		.cfi_endproc
+ 865              	.LFE66:
+ 867              		.section	.text.take_object,"ax",%progbits
+ 868              		.align	1
+ 869              		.global	take_object
+ 870              		.syntax unified
+ 871              		.thumb
+ 872              		.thumb_func
+ 874              	take_object:
+ 875              	.LVL152:
+ 876              	.LFB65:
+  17:Core/Src/stepper.c ****   CLAW_OPEN; // открываем хват
+ 877              		.loc 1 17 1 is_stmt 1 view -0
+ 878              		.cfi_startproc
+ 879              		@ args = 0, pretend = 0, frame = 0
+ 880              		@ frame_needed = 0, uses_anonymous_args = 0
+  17:Core/Src/stepper.c ****   CLAW_OPEN; // открываем хват
+ 881              		.loc 1 17 1 is_stmt 0 view .LVU195
+ 882 0000 70B5     		push	{r4, r5, r6, lr}
+ 883              	.LCFI6:
+ 884              		.cfi_def_cfa_offset 16
+ 885              		.cfi_offset 4, -16
+ 886              		.cfi_offset 5, -12
+ 887              		.cfi_offset 6, -8
+ 888              		.cfi_offset 14, -4
+  18:Core/Src/stepper.c ****   inv_kin(x, y, z); // обратная кинематики для захвата
+ 889              		.loc 1 18 3 is_stmt 1 view .LVU196
+ 890 0002 174D     		ldr	r5, .L47
+ 891 0004 8426     		movs	r6, #132
+ 892 0006 AE63     		str	r6, [r5, #56]
+  19:Core/Src/stepper.c ****   HAL_Delay(1000); // ждём захвата 500 мс
+ 893              		.loc 1 19 3 view .LVU197
+ 894 0008 FFF7FEFF 		bl	inv_kin
+ 895              	.LVL153:
+  20:Core/Src/stepper.c ****   /*поднятие руки с объектом*/
+ 896              		.loc 1 20 3 view .LVU198
+ 897 000c 4FF47A70 		mov	r0, #1000
+ 898 0010 FFF7FEFF 		bl	HAL_Delay
+ 899              	.LVL154:
+  22:Core/Src/stepper.c ****   Stepper_Angle(2, 90);
+ 900              		.loc 1 22 3 view .LVU199
+ 901 0014 134C     		ldr	r4, .L47+4
+ 902 0016 2146     		mov	r1, r4
+ 903 0018 0120     		movs	r0, #1
+ 904 001a FFF7FEFF 		bl	Stepper_Angle
+ 905              	.LVL155:
+  23:Core/Src/stepper.c ****   Servo_SetAngle(0, 90);
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 23
+
+
+ 906              		.loc 1 23 3 view .LVU200
+ 907 001e 2146     		mov	r1, r4
+ 908 0020 0220     		movs	r0, #2
+ 909 0022 FFF7FEFF 		bl	Stepper_Angle
+ 910              	.LVL156:
+  24:Core/Src/stepper.c ****   
+ 911              		.loc 1 24 3 view .LVU201
+ 912 0026 2146     		mov	r1, r4
+ 913 0028 0020     		movs	r0, #0
+ 914 002a FFF7FEFF 		bl	Servo_SetAngle
+ 915              	.LVL157:
+  27:Core/Src/stepper.c ****   
+ 916              		.loc 1 27 3 view .LVU202
+ 917 002e 3222     		movs	r2, #50
+ 918 0030 6FF0A901 		mvn	r1, #169
+ 919 0034 0120     		movs	r0, #1
+ 920 0036 FFF7FEFF 		bl	inv_kin
+ 921              	.LVL158:
+  29:Core/Src/stepper.c **** 
+ 922              		.loc 1 29 3 view .LVU203
+ 923 003a AE63     		str	r6, [r5, #56]
+  32:Core/Src/stepper.c ****   Stepper_Angle(1, 90);
+ 924              		.loc 1 32 3 view .LVU204
+ 925 003c 2146     		mov	r1, r4
+ 926 003e 0220     		movs	r0, #2
+ 927 0040 FFF7FEFF 		bl	Stepper_Angle
+ 928              	.LVL159:
+  33:Core/Src/stepper.c ****   Servo_SetAngle(0, 90);
+ 929              		.loc 1 33 3 view .LVU205
+ 930 0044 2146     		mov	r1, r4
+ 931 0046 0120     		movs	r0, #1
+ 932 0048 FFF7FEFF 		bl	Stepper_Angle
+ 933              	.LVL160:
+  34:Core/Src/stepper.c ****   Stepper_Angle(0, 90); 
+ 934              		.loc 1 34 3 view .LVU206
+ 935 004c 2146     		mov	r1, r4
+ 936 004e 0020     		movs	r0, #0
+ 937 0050 FFF7FEFF 		bl	Servo_SetAngle
+ 938              	.LVL161:
+  35:Core/Src/stepper.c **** }
+ 939              		.loc 1 35 3 view .LVU207
+ 940 0054 2146     		mov	r1, r4
+ 941 0056 0020     		movs	r0, #0
+ 942 0058 FFF7FEFF 		bl	Stepper_Angle
+ 943              	.LVL162:
+  36:Core/Src/stepper.c **** 
+ 944              		.loc 1 36 1 is_stmt 0 view .LVU208
+ 945 005c 70BD     		pop	{r4, r5, r6, pc}
+ 946              	.L48:
+ 947 005e 00BF     		.align	2
+ 948              	.L47:
+ 949 0060 00080040 		.word	1073743872
+ 950 0064 0000B442 		.word	1119092736
+ 951              		.cfi_endproc
+ 952              	.LFE65:
+ 954              		.section	.text.stepper_init,"ax",%progbits
+ 955              		.align	1
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 24
+
+
+ 956              		.global	stepper_init
+ 957              		.syntax unified
+ 958              		.thumb
+ 959              		.thumb_func
+ 961              	stepper_init:
+ 962              	.LFB67:
+  78:Core/Src/stepper.c **** 	/*установка захвата*/
+ 963              		.loc 1 78 1 is_stmt 1 view -0
+ 964              		.cfi_startproc
+ 965              		@ args = 0, pretend = 0, frame = 0
+ 966              		@ frame_needed = 0, uses_anonymous_args = 0
+ 967 0000 F8B5     		push	{r3, r4, r5, r6, r7, lr}
+ 968              	.LCFI7:
+ 969              		.cfi_def_cfa_offset 24
+ 970              		.cfi_offset 3, -24
+ 971              		.cfi_offset 4, -20
+ 972              		.cfi_offset 5, -16
+ 973              		.cfi_offset 6, -12
+ 974              		.cfi_offset 7, -8
+ 975              		.cfi_offset 14, -4
+  80:Core/Src/stepper.c **** 	flag = 0;
+ 976              		.loc 1 80 2 view .LVU210
+ 977 0002 1F49     		ldr	r1, .L53
+ 978 0004 0020     		movs	r0, #0
+ 979 0006 FFF7FEFF 		bl	Servo_SetAngle
+ 980              	.LVL163:
+  81:Core/Src/stepper.c **** 	CLAW_OPEN;
+ 981              		.loc 1 81 2 view .LVU211
+  81:Core/Src/stepper.c **** 	CLAW_OPEN;
+ 982              		.loc 1 81 7 is_stmt 0 view .LVU212
+ 983 000a 1E4D     		ldr	r5, .L53+4
+ 984 000c 0024     		movs	r4, #0
+ 985 000e 2C70     		strb	r4, [r5]
+  82:Core/Src/stepper.c ****     
+ 986              		.loc 1 82 2 is_stmt 1 view .LVU213
+ 987 0010 1D4B     		ldr	r3, .L53+8
+ 988 0012 8422     		movs	r2, #132
+ 989 0014 9A63     		str	r2, [r3, #56]
+  85:Core/Src/stepper.c **** 	pos[2] = 159.5; // позиция при касании концевика
+ 990              		.loc 1 85 2 view .LVU214
+ 991 0016 1D4A     		ldr	r2, .L53+12
+ 992 0018 0121     		movs	r1, #1
+ 993 001a 0220     		movs	r0, #2
+ 994 001c FFF7FEFF 		bl	Stepper_Step
+ 995              	.LVL164:
+  86:Core/Src/stepper.c **** 	flag = 0; // разрешаем работу двигателя
+ 996              		.loc 1 86 2 view .LVU215
+  86:Core/Src/stepper.c **** 	flag = 0; // разрешаем работу двигателя
+ 997              		.loc 1 86 9 is_stmt 0 view .LVU216
+ 998 0020 1B4E     		ldr	r6, .L53+16
+ 999 0022 1C4B     		ldr	r3, .L53+20
+ 1000 0024 B360     		str	r3, [r6, #8]	@ float
+  87:Core/Src/stepper.c **** 	Stepper_Angle(2, 90);
+ 1001              		.loc 1 87 2 is_stmt 1 view .LVU217
+  87:Core/Src/stepper.c **** 	Stepper_Angle(2, 90);
+ 1002              		.loc 1 87 7 is_stmt 0 view .LVU218
+ 1003 0026 2C70     		strb	r4, [r5]
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 25
+
+
+  88:Core/Src/stepper.c ****     
+ 1004              		.loc 1 88 2 is_stmt 1 view .LVU219
+ 1005 0028 1B4F     		ldr	r7, .L53+24
+ 1006 002a 3946     		mov	r1, r7
+ 1007 002c 0220     		movs	r0, #2
+ 1008 002e FFF7FEFF 		bl	Stepper_Angle
+ 1009              	.LVL165:
+  91:Core/Src/stepper.c **** 	pos[1] = 185.5; // позиция при касании концевика
+ 1010              		.loc 1 91 2 view .LVU220
+ 1011 0032 1A4A     		ldr	r2, .L53+28
+ 1012 0034 0121     		movs	r1, #1
+ 1013 0036 0846     		mov	r0, r1
+ 1014 0038 FFF7FEFF 		bl	Stepper_Step
+ 1015              	.LVL166:
+  92:Core/Src/stepper.c **** 	flag = 0; // разрешаем работу двигателя
+ 1016              		.loc 1 92 2 view .LVU221
+  92:Core/Src/stepper.c **** 	flag = 0; // разрешаем работу двигателя
+ 1017              		.loc 1 92 9 is_stmt 0 view .LVU222
+ 1018 003c 184B     		ldr	r3, .L53+32
+ 1019 003e 7360     		str	r3, [r6, #4]	@ float
+  93:Core/Src/stepper.c **** 	Stepper_Angle(1, 90); // перемещение в начальную установку
+ 1020              		.loc 1 93 2 is_stmt 1 view .LVU223
+  93:Core/Src/stepper.c **** 	Stepper_Angle(1, 90); // перемещение в начальную установку
+ 1021              		.loc 1 93 7 is_stmt 0 view .LVU224
+ 1022 0040 2C70     		strb	r4, [r5]
+  94:Core/Src/stepper.c ****     
+ 1023              		.loc 1 94 2 is_stmt 1 view .LVU225
+ 1024 0042 3946     		mov	r1, r7
+ 1025 0044 0120     		movs	r0, #1
+ 1026 0046 FFF7FEFF 		bl	Stepper_Angle
+ 1027              	.LVL167:
+  97:Core/Src/stepper.c **** 	pos[0] = 98; // позиция при касании концевика против часово�
+ 1028              		.loc 1 97 2 view .LVU226
+ 1029 004a 4FF49642 		mov	r2, #19200
+ 1030 004e 2146     		mov	r1, r4
+ 1031 0050 2046     		mov	r0, r4
+ 1032 0052 FFF7FEFF 		bl	Stepper_Step
+ 1033              	.LVL168:
+  98:Core/Src/stepper.c **** 	if (flag != 1) // если концевик так и не был задет за 180 градус
+ 1034              		.loc 1 98 2 view .LVU227
+  98:Core/Src/stepper.c **** 	if (flag != 1) // если концевик так и не был задет за 180 градус
+ 1035              		.loc 1 98 9 is_stmt 0 view .LVU228
+ 1036 0056 134B     		ldr	r3, .L53+36
+ 1037 0058 3360     		str	r3, [r6]	@ float
+  99:Core/Src/stepper.c **** 	{
+ 1038              		.loc 1 99 2 is_stmt 1 view .LVU229
+  99:Core/Src/stepper.c **** 	{
+ 1039              		.loc 1 99 11 is_stmt 0 view .LVU230
+ 1040 005a 2B78     		ldrb	r3, [r5]	@ zero_extendqisi2
+  99:Core/Src/stepper.c **** 	{
+ 1041              		.loc 1 99 5 view .LVU231
+ 1042 005c 33B1     		cbz	r3, .L52
+ 1043              	.L50:
+ 105:Core/Src/stepper.c **** 	Stepper_Angle(0, 90); // перемещение в начальную установку
+ 1044              		.loc 1 105 2 is_stmt 1 view .LVU232
+ 105:Core/Src/stepper.c **** 	Stepper_Angle(0, 90); // перемещение в начальную установку
+ 1045              		.loc 1 105 7 is_stmt 0 view .LVU233
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 26
+
+
+ 1046 005e 0020     		movs	r0, #0
+ 1047 0060 084B     		ldr	r3, .L53+4
+ 1048 0062 1870     		strb	r0, [r3]
+ 106:Core/Src/stepper.c **** }
+ 1049              		.loc 1 106 2 is_stmt 1 view .LVU234
+ 1050 0064 0C49     		ldr	r1, .L53+24
+ 1051 0066 FFF7FEFF 		bl	Stepper_Angle
+ 1052              	.LVL169:
+ 107:Core/Src/stepper.c **** 
+ 1053              		.loc 1 107 1 is_stmt 0 view .LVU235
+ 1054 006a F8BD     		pop	{r3, r4, r5, r6, r7, pc}
+ 1055              	.L52:
+ 102:Core/Src/stepper.c **** 		pos[0] = 91.5; // позиция при касании концевика по часовой с�
+ 1056              		.loc 1 102 3 is_stmt 1 view .LVU236
+ 1057 006c 4FF41642 		mov	r2, #38400
+ 1058 0070 0121     		movs	r1, #1
+ 1059 0072 2046     		mov	r0, r4
+ 1060 0074 FFF7FEFF 		bl	Stepper_Step
+ 1061              	.LVL170:
+ 103:Core/Src/stepper.c **** 	}
+ 1062              		.loc 1 103 3 view .LVU237
+ 103:Core/Src/stepper.c **** 	}
+ 1063              		.loc 1 103 10 is_stmt 0 view .LVU238
+ 1064 0078 0B4A     		ldr	r2, .L53+40
+ 1065 007a 3260     		str	r2, [r6]	@ float
+ 1066 007c EFE7     		b	.L50
+ 1067              	.L54:
+ 1068 007e 00BF     		.align	2
+ 1069              	.L53:
+ 1070 0080 00001643 		.word	1125515264
+ 1071 0084 00000000 		.word	flag
+ 1072 0088 00080040 		.word	1073743872
+ 1073 008c 80F40300 		.word	259200
+ 1074 0090 00000000 		.word	pos
+ 1075 0094 00801F43 		.word	1126137856
+ 1076 0098 0000B442 		.word	1119092736
+ 1077 009c 80D50400 		.word	316800
+ 1078 00a0 00803943 		.word	1127841792
+ 1079 00a4 0000C442 		.word	1120141312
+ 1080 00a8 0000B742 		.word	1119289344
+ 1081              		.cfi_endproc
+ 1082              	.LFE67:
+ 1084              		.section	.text.HAL_GPIO_EXTI_Callback,"ax",%progbits
+ 1085              		.align	1
+ 1086              		.global	HAL_GPIO_EXTI_Callback
+ 1087              		.syntax unified
+ 1088              		.thumb
+ 1089              		.thumb_func
+ 1091              	HAL_GPIO_EXTI_Callback:
+ 1092              	.LVL171:
+ 1093              	.LFB71:
+ 212:Core/Src/stepper.c **** 
+ 213:Core/Src/stepper.c **** void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) // Определяем источник преры�
+ 214:Core/Src/stepper.c **** {
+ 1094              		.loc 1 214 1 is_stmt 1 view -0
+ 1095              		.cfi_startproc
+ 1096              		@ args = 0, pretend = 0, frame = 0
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 27
+
+
+ 1097              		@ frame_needed = 0, uses_anonymous_args = 0
+ 1098              		.loc 1 214 1 is_stmt 0 view .LVU240
+ 1099 0000 10B5     		push	{r4, lr}
+ 1100              	.LCFI8:
+ 1101              		.cfi_def_cfa_offset 8
+ 1102              		.cfi_offset 4, -8
+ 1103              		.cfi_offset 14, -4
+ 1104 0002 0446     		mov	r4, r0
+ 215:Core/Src/stepper.c ****     /*Если на входе уровень 0, то проверяем кол-во подтвер
+ 216:Core/Src/stepper.c **** 		if (!(HAL_GPIO_ReadPin(GPIOB, GPIO_Pin)))
+ 1105              		.loc 1 216 3 is_stmt 1 view .LVU241
+ 1106              		.loc 1 216 9 is_stmt 0 view .LVU242
+ 1107 0004 0146     		mov	r1, r0
+ 1108 0006 1048     		ldr	r0, .L60
+ 1109              	.LVL172:
+ 1110              		.loc 1 216 9 view .LVU243
+ 1111 0008 FFF7FEFF 		bl	HAL_GPIO_ReadPin
+ 1112              	.LVL173:
+ 1113              		.loc 1 216 6 discriminator 1 view .LVU244
+ 1114 000c 98B9     		cbnz	r0, .L56
+ 217:Core/Src/stepper.c **** 		{
+ 218:Core/Src/stepper.c **** 		/*Если меньше 10 подтверждений, то добавляем к счётчик�
+ 219:Core/Src/stepper.c **** 			if (btn_cnt < 10)
+ 1115              		.loc 1 219 4 is_stmt 1 view .LVU245
+ 1116              		.loc 1 219 16 is_stmt 0 view .LVU246
+ 1117 000e 0F4B     		ldr	r3, .L60+4
+ 1118 0010 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 1119              		.loc 1 219 7 view .LVU247
+ 1120 0012 092B     		cmp	r3, #9
+ 1121 0014 03D8     		bhi	.L57
+ 220:Core/Src/stepper.c **** 			{
+ 221:Core/Src/stepper.c **** 				btn_cnt++;
+ 1122              		.loc 1 221 5 is_stmt 1 view .LVU248
+ 1123              		.loc 1 221 12 is_stmt 0 view .LVU249
+ 1124 0016 0133     		adds	r3, r3, #1
+ 1125 0018 0C4A     		ldr	r2, .L60+4
+ 1126 001a 1370     		strb	r3, [r2]
+ 1127              	.L55:
+ 222:Core/Src/stepper.c **** 			}
+ 223:Core/Src/stepper.c **** 		/*Иначе проверяем разрешение(флаг) и выполняем действ
+ 224:Core/Src/stepper.c **** 			else
+ 225:Core/Src/stepper.c **** 			{
+ 226:Core/Src/stepper.c **** 				if (flag == 0)
+ 227:Core/Src/stepper.c **** 				{
+ 228:Core/Src/stepper.c **** 					HAL_GPIO_DeInit(GPIOB, GPIO_Pin); // отключение концевика
+ 229:Core/Src/stepper.c **** 					flag = 1; // запрещаем работу двигателя
+ 230:Core/Src/stepper.c **** 				}
+ 231:Core/Src/stepper.c **** 			}
+ 232:Core/Src/stepper.c **** 		}
+ 233:Core/Src/stepper.c **** 		else // иначе, если уровень 1, отнимаем подтверждение из �
+ 234:Core/Src/stepper.c **** 		{
+ 235:Core/Src/stepper.c **** 			if (btn_cnt > 0) // при условии, что значение счётчка больше �
+ 236:Core/Src/stepper.c **** 			{
+ 237:Core/Src/stepper.c **** 				btn_cnt--;
+ 238:Core/Src/stepper.c **** 			}
+ 239:Core/Src/stepper.c **** 		}
+ 240:Core/Src/stepper.c **** }
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 28
+
+
+ 1128              		.loc 1 240 1 view .LVU250
+ 1129 001c 10BD     		pop	{r4, pc}
+ 1130              	.LVL174:
+ 1131              	.L57:
+ 226:Core/Src/stepper.c **** 				{
+ 1132              		.loc 1 226 5 is_stmt 1 view .LVU251
+ 226:Core/Src/stepper.c **** 				{
+ 1133              		.loc 1 226 14 is_stmt 0 view .LVU252
+ 1134 001e 0C4B     		ldr	r3, .L60+8
+ 1135 0020 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 226:Core/Src/stepper.c **** 				{
+ 1136              		.loc 1 226 8 view .LVU253
+ 1137 0022 002B     		cmp	r3, #0
+ 1138 0024 FAD1     		bne	.L55
+ 228:Core/Src/stepper.c **** 					flag = 1; // запрещаем работу двигателя
+ 1139              		.loc 1 228 6 is_stmt 1 view .LVU254
+ 1140 0026 2146     		mov	r1, r4
+ 1141 0028 0748     		ldr	r0, .L60
+ 1142 002a FFF7FEFF 		bl	HAL_GPIO_DeInit
+ 1143              	.LVL175:
+ 229:Core/Src/stepper.c **** 				}
+ 1144              		.loc 1 229 6 view .LVU255
+ 229:Core/Src/stepper.c **** 				}
+ 1145              		.loc 1 229 11 is_stmt 0 view .LVU256
+ 1146 002e 084B     		ldr	r3, .L60+8
+ 1147 0030 0122     		movs	r2, #1
+ 1148 0032 1A70     		strb	r2, [r3]
+ 1149 0034 F2E7     		b	.L55
+ 1150              	.L56:
+ 235:Core/Src/stepper.c **** 			{
+ 1151              		.loc 1 235 4 is_stmt 1 view .LVU257
+ 235:Core/Src/stepper.c **** 			{
+ 1152              		.loc 1 235 16 is_stmt 0 view .LVU258
+ 1153 0036 054B     		ldr	r3, .L60+4
+ 1154 0038 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+ 235:Core/Src/stepper.c **** 			{
+ 1155              		.loc 1 235 7 view .LVU259
+ 1156 003a 002B     		cmp	r3, #0
+ 1157 003c EED0     		beq	.L55
+ 237:Core/Src/stepper.c **** 			}
+ 1158              		.loc 1 237 5 is_stmt 1 view .LVU260
+ 237:Core/Src/stepper.c **** 			}
+ 1159              		.loc 1 237 12 is_stmt 0 view .LVU261
+ 1160 003e 013B     		subs	r3, r3, #1
+ 1161 0040 024A     		ldr	r2, .L60+4
+ 1162 0042 1370     		strb	r3, [r2]
+ 1163              		.loc 1 240 1 view .LVU262
+ 1164 0044 EAE7     		b	.L55
+ 1165              	.L61:
+ 1166 0046 00BF     		.align	2
+ 1167              	.L60:
+ 1168 0048 000C0140 		.word	1073810432
+ 1169 004c 00000000 		.word	btn_cnt
+ 1170 0050 00000000 		.word	flag
+ 1171              		.cfi_endproc
+ 1172              	.LFE71:
+ 1174              		.section	.text.HAL_TIM_PeriodElapsedCallback,"ax",%progbits
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 29
+
+
+ 1175              		.align	1
+ 1176              		.global	HAL_TIM_PeriodElapsedCallback
+ 1177              		.syntax unified
+ 1178              		.thumb
+ 1179              		.thumb_func
+ 1181              	HAL_TIM_PeriodElapsedCallback:
+ 1182              	.LVL176:
+ 1183              	.LFB72:
+ 241:Core/Src/stepper.c **** 
+ 242:Core/Src/stepper.c **** void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+ 243:Core/Src/stepper.c **** {
+ 1184              		.loc 1 243 1 is_stmt 1 view -0
+ 1185              		.cfi_startproc
+ 1186              		@ args = 0, pretend = 0, frame = 0
+ 1187              		@ frame_needed = 0, uses_anonymous_args = 0
+ 244:Core/Src/stepper.c ****         if(htim->Instance == TIM3) //check if the interrupt comes from TIM1
+ 1188              		.loc 1 244 9 view .LVU264
+ 1189              		.loc 1 244 16 is_stmt 0 view .LVU265
+ 1190 0000 0268     		ldr	r2, [r0]
+ 1191              		.loc 1 244 11 view .LVU266
+ 1192 0002 174B     		ldr	r3, .L69+8
+ 1193 0004 9A42     		cmp	r2, r3
+ 1194 0006 00D0     		beq	.L68
+ 1195 0008 7047     		bx	lr
+ 1196              	.L68:
+ 243:Core/Src/stepper.c ****         if(htim->Instance == TIM3) //check if the interrupt comes from TIM1
+ 1197              		.loc 1 243 1 view .LVU267
+ 1198 000a 10B5     		push	{r4, lr}
+ 1199              	.LCFI9:
+ 1200              		.cfi_def_cfa_offset 8
+ 1201              		.cfi_offset 4, -8
+ 1202              		.cfi_offset 14, -4
+ 245:Core/Src/stepper.c ****         {
+ 246:Core/Src/stepper.c ****             t[0] += 0.00005;
+ 1203              		.loc 1 246 13 is_stmt 1 view .LVU268
+ 1204              		.loc 1 246 14 is_stmt 0 view .LVU269
+ 1205 000c 154C     		ldr	r4, .L69+12
+ 1206 000e 2068     		ldr	r0, [r4]	@ float
+ 1207              	.LVL177:
+ 1208              		.loc 1 246 14 view .LVU270
+ 1209 0010 FFF7FEFF 		bl	__aeabi_f2d
+ 1210              	.LVL178:
+ 1211              		.loc 1 246 18 view .LVU271
+ 1212 0014 10A3     		adr	r3, .L69
+ 1213 0016 D3E90023 		ldrd	r2, [r3]
+ 1214 001a FFF7FEFF 		bl	__aeabi_dadd
+ 1215              	.LVL179:
+ 1216 001e FFF7FEFF 		bl	__aeabi_d2f
+ 1217              	.LVL180:
+ 1218 0022 2060     		str	r0, [r4]	@ float
+ 247:Core/Src/stepper.c **** 			t[1] += 0.00005;
+ 1219              		.loc 1 247 4 is_stmt 1 view .LVU272
+ 1220              		.loc 1 247 5 is_stmt 0 view .LVU273
+ 1221 0024 6068     		ldr	r0, [r4, #4]	@ float
+ 1222 0026 FFF7FEFF 		bl	__aeabi_f2d
+ 1223              	.LVL181:
+ 1224              		.loc 1 247 9 view .LVU274
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 30
+
+
+ 1225 002a 0BA3     		adr	r3, .L69
+ 1226 002c D3E90023 		ldrd	r2, [r3]
+ 1227 0030 FFF7FEFF 		bl	__aeabi_dadd
+ 1228              	.LVL182:
+ 1229 0034 FFF7FEFF 		bl	__aeabi_d2f
+ 1230              	.LVL183:
+ 1231 0038 6060     		str	r0, [r4, #4]	@ float
+ 248:Core/Src/stepper.c **** 			t[2] += 0.00005;
+ 1232              		.loc 1 248 4 is_stmt 1 view .LVU275
+ 1233              		.loc 1 248 5 is_stmt 0 view .LVU276
+ 1234 003a A068     		ldr	r0, [r4, #8]	@ float
+ 1235 003c FFF7FEFF 		bl	__aeabi_f2d
+ 1236              	.LVL184:
+ 1237              		.loc 1 248 9 view .LVU277
+ 1238 0040 05A3     		adr	r3, .L69
+ 1239 0042 D3E90023 		ldrd	r2, [r3]
+ 1240 0046 FFF7FEFF 		bl	__aeabi_dadd
+ 1241              	.LVL185:
+ 1242 004a FFF7FEFF 		bl	__aeabi_d2f
+ 1243              	.LVL186:
+ 1244 004e A060     		str	r0, [r4, #8]	@ float
+ 249:Core/Src/stepper.c ****         }
+ 250:Core/Src/stepper.c **** }
+ 1245              		.loc 1 250 1 view .LVU278
+ 1246 0050 10BD     		pop	{r4, pc}
+ 1247              	.L70:
+ 1248 0052 00BFAFF3 		.align	3
+ 1248      0080
+ 1249              	.L69:
+ 1250 0058 2D431CEB 		.word	-350469331
+ 1251 005c E2360A3F 		.word	1057634018
+ 1252 0060 00040040 		.word	1073742848
+ 1253 0064 00000000 		.word	t
+ 1254              		.cfi_endproc
+ 1255              	.LFE72:
+ 1257              		.global	btn_cnt
+ 1258              		.section	.bss.btn_cnt,"aw",%nobits
+ 1261              	btn_cnt:
+ 1262 0000 00       		.space	1
+ 1263              		.global	t
+ 1264              		.section	.bss.t,"aw",%nobits
+ 1265              		.align	2
+ 1268              	t:
+ 1269 0000 00000000 		.space	12
+ 1269      00000000 
+ 1269      00000000 
+ 1270              		.global	prev
+ 1271              		.section	.data.prev,"aw"
+ 1272              		.align	2
+ 1275              	prev:
+ 1276 0000 0000B442 		.word	1119092736
+ 1277 0004 00000000 		.word	0
+ 1278              		.global	pos
+ 1279              		.section	.data.pos,"aw"
+ 1280              		.align	2
+ 1283              	pos:
+ 1284 0000 0000B442 		.word	1119092736
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 31
+
+
+ 1285 0004 0000B442 		.word	1119092736
+ 1286 0008 0000B442 		.word	1119092736
+ 1287              		.global	flag
+ 1288              		.section	.bss.flag,"aw",%nobits
+ 1291              	flag:
+ 1292 0000 00       		.space	1
+ 1293              		.global	Steps
+ 1294              		.section	.bss.Steps,"aw",%nobits
+ 1295              		.align	2
+ 1298              	Steps:
+ 1299 0000 00000000 		.space	4
+ 1300              		.text
+ 1301              	.Letext0:
+ 1302              		.file 2 "E:\\STM\\arm-none-eabi\\bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/inc
+ 1303              		.file 3 "E:\\STM\\arm-none-eabi\\bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/inc
+ 1304              		.file 4 "Drivers/CMSIS/Device/ST/STM32F1xx/Include/stm32f103xb.h"
+ 1305              		.file 5 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_def.h"
+ 1306              		.file 6 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_gpio.h"
+ 1307              		.file 7 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_dma.h"
+ 1308              		.file 8 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h"
+ 1309              		.file 9 "Core/Inc/main.h"
+ 1310              		.file 10 "E:\\STM\\arm-none-eabi\\bin/../lib/gcc/arm-none-eabi/14.3.1/../../../../arm-none-eabi/in
+ 1311              		.file 11 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h"
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 32
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 stepper.c
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:19     .text.Servo_SetAngle:00000000 $t
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:25     .text.Servo_SetAngle:00000000 Servo_SetAngle
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:174    .text.Servo_SetAngle:000000b4 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1275   .data.prev:00000000 prev
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:183    .text.Stepper_Step:00000000 $t
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:189    .text.Stepper_Step:00000000 Stepper_Step
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:317    .text.Stepper_Step:00000074 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1291   .bss.flag:00000000 flag
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:324    .text.Stepper_Angle:00000000 $t
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:330    .text.Stepper_Angle:00000000 Stepper_Angle
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:484    .text.Stepper_Angle:000000b0 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1283   .data.pos:00000000 pos
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1298   .bss.Steps:00000000 Steps
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:492    .text.inv_kin:00000000 $t
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:498    .text.inv_kin:00000000 inv_kin
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:850    .text.inv_kin:000001d0 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:868    .text.take_object:00000000 $t
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:874    .text.take_object:00000000 take_object
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:949    .text.take_object:00000060 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:955    .text.stepper_init:00000000 $t
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:961    .text.stepper_init:00000000 stepper_init
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1070   .text.stepper_init:00000080 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1085   .text.HAL_GPIO_EXTI_Callback:00000000 $t
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1091   .text.HAL_GPIO_EXTI_Callback:00000000 HAL_GPIO_EXTI_Callback
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1168   .text.HAL_GPIO_EXTI_Callback:00000048 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1261   .bss.btn_cnt:00000000 btn_cnt
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1175   .text.HAL_TIM_PeriodElapsedCallback:00000000 $t
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1181   .text.HAL_TIM_PeriodElapsedCallback:00000000 HAL_TIM_PeriodElapsedCallback
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1250   .text.HAL_TIM_PeriodElapsedCallback:00000058 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1268   .bss.t:00000000 t
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1262   .bss.btn_cnt:00000000 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1265   .bss.t:00000000 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1272   .data.prev:00000000 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1280   .data.pos:00000000 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1292   .bss.flag:00000000 $d
+C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s:1295   .bss.Steps:00000000 $d
+
+UNDEFINED SYMBOLS
+__aeabi_fsub
+__aeabi_fcmplt
+__aeabi_fcmpgt
+__aeabi_fadd
+__aeabi_fmul
+__aeabi_fdiv
+__aeabi_f2uiz
+HAL_Delay
+HAL_GPIO_WritePin
+us_delay
+__aeabi_i2f
+atan2f
+__aeabi_i2d
+pow
+__aeabi_dadd
+sqrt
+__aeabi_dsub
+ARM GAS  C:\Users\Admin\AppData\Local\Temp\cc7hunxW.s 			page 33
+
+
+__aeabi_d2f
+__aeabi_f2d
+__aeabi_ddiv
+acos
+atan
+HAL_GPIO_ReadPin
+HAL_GPIO_DeInit
