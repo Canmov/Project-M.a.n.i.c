@@ -65,6 +65,37 @@ void MX_USB_DEVICE_Init(void)
 {
   /* USER CODE BEGIN USB_DEVICE_Init_PreTreatment */
 
+  // ===== АППАРАТНЫЙ ПЕРЕЗАПУСК USB для STM32F103 =====
+
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  // 1. Включаем тактирование порта A
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+
+  // 2. Настраиваем PA12 (USB_DP) как обычный выход
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_RESET);
+
+  GPIO_InitStruct.Pin = GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  // 3. Держим низкий уровень 100 мс (имитация отключения)
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_RESET);
+  HAL_Delay(100);
+
+  // 4. Возвращаем PA12 в режим USB (альтернативная функция)
+  // Для STM32F103 нужно использовать GPIO_MODE_AF_PP без поля Alternate
+  GPIO_InitStruct.Pin = GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;   // Альтернативная функция Push-Pull
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  // 5. Небольшая задержка перед инициализацией USB
+  HAL_Delay(50);
+
   /* USER CODE END USB_DEVICE_Init_PreTreatment */
 
   /* Init Device Library, add supported class and start the library. */
@@ -97,4 +128,3 @@ void MX_USB_DEVICE_Init(void)
 /**
   * @}
   */
-

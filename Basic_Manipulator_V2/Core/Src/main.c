@@ -155,10 +155,22 @@ int main(void)
   ssd1306_UpdateScreen();
 
   // Приветствие на OLED
-  ssd1306_SetCursor(10, 10);      // ← БЕЗ hi2c
-  ssd1306_WriteString("USB+OLED", Font_11x18, White);  // ← Три параметра
-  ssd1306_WriteString("Ready!", Font_7x10, White);
-  ssd1306_UpdateScreen();   // ← Передаем &hi2c1
+  //ssd1306_SetCursor(10, 10);      // ← БЕЗ hi2c
+  //ssd1306_WriteString("USB+OLED", Font_11x18, White);  // ← Три параметра
+ // ssd1306_WriteString("Ready!", Font_7x10, White);
+  //ssd1306_UpdateScreen();   // ← Передаем &hi2c1
+
+  // В main.c, после ssd1306_Init():
+  ssd1306_Fill(Black);
+  ssd1306_SetCursor(0, 0);
+
+  // Сначала попробуйте цифры (они должны работать)
+  ssd1306_WriteString("TEST", Font_11x18, White);
+
+  ssd1306_SetCursor(0, 20);
+  ssd1306_WriteString("TEST", Font_7x10, White);
+
+  ssd1306_UpdateScreen();
 
   // Приветствие на ПК
   SendToPC("\r\n*** USB+OLED Ready! ***\r\n");
