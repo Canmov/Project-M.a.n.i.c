@@ -1,0 +1,8 @@
+../Core/Src/stepper.c:16:6:take_object	24	static
+../Core/Src/stepper.c:38:6:inv_kin	72	static
+../Core/Src/stepper.c:77:6:stepper_init	8	static
+../Core/Src/stepper.c:109:6:Stepper_Angle	40	static
+../Core/Src/stepper.c:149:6:Servo_SetAngle	32	static
+../Core/Src/stepper.c:174:6:Stepper_Step	32	static
+../Core/Src/stepper.c:213:6:HAL_GPIO_EXTI_Callback	16	static
+../Core/Src/stepper.c:242:6:HAL_TIM_PeriodElapsedCallback	16	static

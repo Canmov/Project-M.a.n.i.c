@@ -1,0 +1,8 @@
+../Core/Src/stepper.c:16:6:take_object	1
+../Core/Src/stepper.c:38:6:inv_kin	1
+../Core/Src/stepper.c:77:6:stepper_init	2
+../Core/Src/stepper.c:109:6:Stepper_Angle	8
+../Core/Src/stepper.c:149:6:Servo_SetAngle	5
+../Core/Src/stepper.c:174:6:Stepper_Step	7
+../Core/Src/stepper.c:213:6:HAL_GPIO_EXTI_Callback	5
+../Core/Src/stepper.c:242:6:HAL_TIM_PeriodElapsedCallback	2

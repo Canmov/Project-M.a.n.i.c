@@ -27,6 +27,9 @@
 #include "ssd1306_fonts.h"
 #include <string.h>
 #include <stdio.h>
+
+#include "stepper.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -36,6 +39,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+#define DWT_CONTROL *(volatile unsigned long *)0xE0001000
+#define SCB_DEMCR   *(volatile unsigned long *)0xE000EDFC
 
 /* USER CODE END PD */
 
@@ -69,6 +75,18 @@ void ProcessCommand(char *cmd);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+ void DWT_Init(void)
+{
+    SCB_DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // разрешаем использовать счётчик
+    DWT_CONTROL |= DWT_CTRL_CYCCNTENA_Msk;   // запускаем счётчик
+}
+
+void us_delay(uint32_t us)
+{
+    uint32_t us_count_tic =  us * (SystemCoreClock / 1000000); // получаем кол-во тактов за 1 мкс и умножаем на наше значение
+    DWT->CYCCNT = 0U; // обнуляем счётчик
+    while(DWT->CYCCNT < us_count_tic);
+}
 // Отправить строку на ПК через USB
 void SendToPC(char *str)
 {
@@ -86,32 +104,92 @@ void ProcessUSBCommand(char *cmd)
         len--;
     }
 
+    if (strlen(cmd) == 0) return;
+
     // Отправляем подтверждение на ПК
     char reply[128];
     sprintf(reply, "Received: %s\r\n", cmd);
     SendToPC(reply);
 
-    // Выводим на OLED
-    ssd1306_Fill(Black);
-    ssd1306_SetCursor(0, 0);
-    ssd1306_WriteString(">> ", Font_7x10, White);
-    ssd1306_WriteString(cmd, Font_7x10, White);
-    ssd1306_UpdateScreen();
-
-    // Если команда "clear" - очищаем экран
-    if (strcmp(cmd, "clear") == 0)
+    // ===== ОБРАБОТКА КОМАНД =====
+    
+    // Команда: take_object <x> <y> <z>
+    if (strncmp(cmd, "take_object", 11) == 0)
+    {
+        int x, y, z;
+        // Парсим координаты
+        if (sscanf(cmd, "take_object %d %d %d", &x, &y, &z) == 3)
+        {
+            sprintf(reply, "Taking object at (%d, %d, %d)\r\n", x, y, z);
+            SendToPC(reply);
+            
+            // Выполняем захват
+            take_object(x, y, z);
+            
+        }
+        else
+        {
+            SendToPC("Usage: take_object <x> <y> <z>\r\n");
+        }
+    }
+    
+    // Команда: angle <link> <degrees>
+    else if (strncmp(cmd, "angle", 5) == 0)
+    {
+        int link, angle;
+        if (sscanf(cmd, "angle %d %d", &link, &angle) == 2)
+        {
+            sprintf(reply, "Moving link %d to %d°\r\n", link, angle);
+            SendToPC(reply);
+            
+            Stepper_Angle(link, angle);
+            
+            sprintf(reply, "Link %d -> %d° done!\r\n", link, angle);
+            SendToPC(reply);
+        }
+        else
+        {
+            SendToPC("Usage: angle <link> <degrees>\r\n");
+        }
+    }
+    
+    // Команда: home
+    else if (strcmp(cmd, "home") == 0)
+    {
+        SendToPC("Moving to home position...\r\n");
+        Stepper_Angle(0, 90);
+        Stepper_Angle(1, 90);
+        Stepper_Angle(2, 90);
+        SendToPC("Home position reached!\r\n");
+        //gohome() надо
+    }
+    
+    // Команда: clear
+    else if (strcmp(cmd, "clear") == 0)
     {
         ssd1306_Fill(Black);
         ssd1306_UpdateScreen();
         SendToPC("Screen cleared\r\n");
     }
-
-    // Если команда "help" - показываем справку
-    if (strcmp(cmd, "help") == 0)
+    
+    // Команда: help
+    else if (strcmp(cmd, "help") == 0)
     {
-        SendToPC("Commands: clear, help, <any text>\r\n");
+        SendToPC("\r\n========== COMMANDS ==========\r\n");
+        SendToPC("  take_object <x> <y> <z>  - захватить объект\r\n");
+        SendToPC("  angle <link> <deg>      - повернуть звено\r\n");
+        SendToPC("  home                    - вернуться в 90°\r\n");
+        SendToPC("  clear                   - очистить OLED\r\n");
+        SendToPC("  help                    - показать справку\r\n");
+        SendToPC("================================\r\n");
     }
-}
+    
+    // Если команда неизвестна
+    else
+    {
+        SendToPC("Unknown command. Type 'help' for commands.\r\n");
+    }
+  } 
 
 /* USER CODE END 0 */
 
@@ -135,9 +213,12 @@ int main(void)
   /* USER CODE END Init */
 
   /* Configure the system clock */
+
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
+
+  DWT_Init();
 
   /* USER CODE END SysInit */
 
@@ -148,6 +229,10 @@ int main(void)
   MX_I2C1_Init();
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
+
+
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);/*Даём разрешение на работу ШИМ таймера*/
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
 
   // ===== ИНИЦИАЛИЗАЦИЯ OLED =====
   ssd1306_Init();
@@ -163,19 +248,6 @@ int main(void)
   // В main.c, после ssd1306_Init():
   ssd1306_Fill(Black);
   ssd1306_SetCursor(0, 0);
-
-  // Сначала попробуйте цифры (они должны работать)
-  ssd1306_WriteString("TEST", Font_11x18, White);
-
-  ssd1306_SetCursor(0, 20);
-  ssd1306_WriteString("TEST", Font_7x10, White);
-
-  ssd1306_UpdateScreen();
-
-  // Приветствие на ПК
-  SendToPC("\r\n*** USB+OLED Ready! ***\r\n");
-  SendToPC("Send any text to display on OLED\r\n");
-  SendToPC("Commands: clear, help\r\n\r\n");
 
   /* USER CODE END 2 */
 

@@ -56,6 +56,9 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
+void DWT_Init(void);
+void us_delay(uint32_t us);
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
